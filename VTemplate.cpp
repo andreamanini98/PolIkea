@@ -69,6 +69,7 @@ protected:
     float CamAlpha = 0.0f;
     float CamBeta = 0.0f;
     float CamRho = 0.0f;
+    bool MoveCam = true;
 
     // Here you set the main application parameters
     void setWindowParameters() {
@@ -175,10 +176,10 @@ protected:
         }
 
         // Creates a mesh with direct enumeration of vertices and indices
-        MGrid.vertices = {{{-6, -2, -6}, {0.0f, 0.0f}},
-                          {{-6, -2, 6},  {0.0f, 1.0f}},
-                          {{6,  -2, -6}, {1.0f, 0.0f}},
-                          {{6,  -2, 6},  {1.0f, 1.0f}}};
+        MGrid.vertices = {{{-6, 0, -6}, {0.0f, 0.0f}},
+                          {{-6, 0, 6},  {0.0f, 1.0f}},
+                          {{6,  0, -6}, {1.0f, 0.0f}},
+                          {{6,  0, 6},  {1.0f, 1.0f}}};
         MGrid.indices = {0, 1, 2, 1, 3, 2};
         MGrid.initMesh(this, &VD);
 
@@ -293,8 +294,12 @@ protected:
         }
 
         // TODO maybe move to external function
+        // ----- MOVE CAMERA AND OBJECTS LOGIC ----- //
         const float ROT_SPEED = glm::radians(120.0f);
         const float MOVE_SPEED = 2.0f;
+
+        static bool debounce = false;
+        static int curDebounce = 0;
 
         float deltaT;
         auto m = glm::vec3(0.0f), r = glm::vec3(0.0f);
@@ -318,6 +323,29 @@ protected:
         CamPos = CamPos + MOVE_SPEED * m.x * ux * deltaT;
         CamPos = CamPos + MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT;
         CamPos = CamPos + MOVE_SPEED * m.z * uz * deltaT;
+        if (!MoveCam) {
+            // TODO pick the closest to the camera and move only that
+            MV[1].modelPos = glm::mat4(CamDir) * glm::vec4(CamPos.x-1.0*sin(CamBeta), 0, -1.0*cos(CamBeta), 1);
+            MV[1].modelRot = glm::quat(glm::vec3(0, -ROT_SPEED * deltaT * r.y, 0)) *
+                             glm::quat(glm::vec3(-ROT_SPEED * deltaT * r.x, 0, 0)) *
+                             glm::quat(glm::vec3(0, 0, ROT_SPEED * deltaT * r.z)) *
+                             MV[1].modelRot;
+        }
+
+        //glm::vec3 c =
+
+        if (fire) {
+            if (!debounce) {
+                debounce = true;
+                curDebounce = GLFW_KEY_SPACE;
+                MoveCam = !MoveCam;
+            }
+        } else {
+            if ((curDebounce == GLFW_KEY_SPACE) && debounce) {
+                debounce = false;
+                curDebounce = 0;
+            }
+        }
 
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);
