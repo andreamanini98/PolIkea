@@ -30,7 +30,7 @@ struct ModelInfo {
     DescriptorSet dsModel;
     UniformBlock modelUBO{};
     glm::vec3 modelPos{};
-    glm::quat modelRot{};
+    float modelRot = 0.0;
 };
 
 
@@ -69,7 +69,8 @@ protected:
     float CamAlpha = 0.0f;
     float CamBeta = 0.0f;
     float CamRho = 0.0f;
-    bool MoveCam = true;
+    bool OnlyMoveCam = true;
+    uint32_t MoveObjIndex = 0;
 
     // Here you set the main application parameters
     void setWindowParameters() {
@@ -168,9 +169,7 @@ protected:
             // The last is a constant specifying the file type: currently only OBJ or GLTF
             MI.model.init(this, &VD, entry.path(), MGCG);
             MI.modelPos = glm::vec3(0.0 + i * 2, 0.0, 0.0);
-            MI.modelRot = glm::quat(glm::vec3(0, 0, 0)) *
-                          glm::quat(glm::vec3(0, 0, 0)) *
-                          glm::quat(glm::vec3(0, 0, 0));
+            MI.modelRot = 0.0f;
             MV.push_back(MI);
             i++;
         }
@@ -321,15 +320,24 @@ protected:
         glm::vec3 ux = glm::rotate(glm::mat4(1.0f), CamAlpha, glm::vec3(0, 1, 0)) * glm::vec4(1, 0, 0, 1);
         glm::vec3 uz = glm::rotate(glm::mat4(1.0f), CamAlpha, glm::vec3(0, 1, 0)) * glm::vec4(0, 0, -1, 1);
         CamPos = CamPos + MOVE_SPEED * m.x * ux * deltaT;
-        CamPos = CamPos + MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT;
+        //CamPos = CamPos + MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT; //Do not allow to fly
         CamPos = CamPos + MOVE_SPEED * m.z * uz * deltaT;
-        if (!MoveCam) {
+        if (!OnlyMoveCam) {
             // TODO pick the closest to the camera and move only that
-            MV[1].modelPos = glm::mat4(CamDir) * glm::vec4(CamPos.x-1.0*sin(CamBeta), 0, -1.0*cos(CamBeta), 1);
-            MV[1].modelRot = glm::quat(glm::vec3(0, -ROT_SPEED * deltaT * r.y, 0)) *
-                             glm::quat(glm::vec3(-ROT_SPEED * deltaT * r.x, 0, 0)) *
-                             glm::quat(glm::vec3(0, 0, ROT_SPEED * deltaT * r.z)) *
-                             MV[1].modelRot;
+            const glm::vec3 modelPos = glm::vec3(
+                    CamPos.x,
+                    0.0f,
+                    CamPos.z - 2.0f
+            );
+
+            MV[MoveObjIndex].modelPos =
+                    glm::translate(glm::mat4(1.0f), CamPos) *
+                    glm::rotate(glm::mat4(1), CamAlpha, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                    glm::rotate(glm::mat4(1), CamBeta, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                    glm::translate(glm::mat4(1.0f), -CamPos) *
+                    glm::vec4(modelPos, 1.0f);
+
+            MV[MoveObjIndex].modelRot = CamAlpha;
         }
 
         //glm::vec3 c =
@@ -338,7 +346,19 @@ protected:
             if (!debounce) {
                 debounce = true;
                 curDebounce = GLFW_KEY_SPACE;
-                MoveCam = !MoveCam;
+                OnlyMoveCam = !OnlyMoveCam;
+
+                if(!OnlyMoveCam) {
+                    float distance = glm::distance(CamPos, MV[0].modelPos);
+                    MoveObjIndex = 0;
+                    for (std::size_t i = 1; i < MV.size(); ++i) {
+                        float newDistance = glm::distance(CamPos, MV[i].modelPos);
+                        if(newDistance < distance) {
+                            distance = newDistance;
+                            MoveObjIndex = i;
+                        }
+                    }
+                }
             }
         } else {
             if ((curDebounce == GLFW_KEY_SPACE) && debounce) {
@@ -350,8 +370,7 @@ protected:
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);
 
-        glm::mat4 World = glm::translate(glm::mat4(1), glm::vec3(0, -5, 0)) *
-                          glm::scale(glm::mat4(1), glm::vec3(5.0f));
+        glm::mat4 World = glm::scale(glm::mat4(1), glm::vec3(5.0f));
         uboGrid.mvpMat = ViewPrj * World;
         // the .map() method of a DataSet object, requires the current image of the swap chain as first parameter
         // the second parameter is the pointer to the C++ data structure to transfer to the GPU

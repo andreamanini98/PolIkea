@@ -26,16 +26,15 @@ glm::mat4 MakeViewProjectionMatrix(float Ar, float Alpha, float Beta, float Rho,
 }
 
 
-glm::mat4 MakeWorldMatrix(glm::vec3 pos, glm::quat rQ, glm::vec3 size) {
+glm::mat4 MakeWorldMatrix(glm::vec3 pos, float yRot, glm::vec3 size) {
     // creates and returns a World Matrix that positions the object at <pos>,
     // orients it according to <rQ>, and scales it according to the sizes
     // given in vector <size>
 
     glm::mat4 T = glm::translate(glm::mat4(1), pos); // Translation matrix
-    auto Q = glm::mat4(rQ);                                   // Rotation matrix created with quaternion
     glm::mat4 S = glm::scale(glm::mat4(1), size);    // Scaling matrix
 
-    glm::mat4 M = T * Q * S;
+    glm::mat4 M = T * glm::rotate(glm::mat4(1.0), yRot, glm::vec3(0, 1, 0)) * S;
 
     return M;
 }
