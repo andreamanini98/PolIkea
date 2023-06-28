@@ -54,6 +54,8 @@ struct ModelInfo {
     glm::vec3 modelPos{};
     float modelRot = 0.0;
 
+    float cylinderRadius;
+    float cylinderHeight;
     glm::vec3 minCoords;
     glm::vec3 maxCoords;
     glm::vec3 size;
@@ -63,26 +65,27 @@ struct ModelInfo {
     glm::vec3 getMaxCoordsPos() const { return maxCoords + modelPos; }
 
     bool checkCollision(const ModelInfo& other) const {
-        // Check for overlap along the x-axis
-        if (getMaxCoordsPos().x < other.getMinCoordPos().x || getMinCoordPos().x > other.getMaxCoordsPos().x) {
-            return false; // No overlap along the x-axis
+        // Cylindrical body collision check
+        glm::vec3 centerHoriz = glm::vec3(modelPos.x + center.x, 0.0, modelPos.z + center.z);
+        glm::vec3 centerHorizB = glm::vec3(other.modelPos.x + other.center.x, 0.0, other.modelPos.z + other.center.z);
+
+        float distCenter = glm::distance(centerHoriz, centerHorizB);
+        if (distCenter > cylinderRadius + other.cylinderRadius) {
+            return false; // Cylindrical bodies don't intersect, no collision
         }
 
-        // Check for overlap along the y-axis
-        if (getMaxCoordsPos().y < other.getMinCoordPos().y || getMinCoordPos().y > other.getMaxCoordsPos().y) {
-            return false; // No overlap along the y-axis
+        // Top and bottom cap collision check
+        float heightA = cylinderHeight;
+        float heightB = other.cylinderHeight;
+        float distCaps = std::abs(modelPos.y + center.y - other.modelPos.y - other.center.y) - (heightA + heightB) * 0.5f;
+        if (distCaps > 0.0f) {
+            return false; // Top and bottom caps don't intersect, no collision
         }
 
-        // Check for overlap along the z-axis
-        if (getMaxCoordsPos().z < other.getMinCoordPos().z || getMinCoordPos().z > other.getMaxCoordsPos().z) {
-            return false; // No overlap along the z-axis
-        }
-
-        // If overlap occurs along all axes, a collision is detected
-        return true;
+        // Step 4: Both cylindrical body and top/bottom caps pass the collision check
+        return true; // Collision detected
     }
 };
-
 
 // MAIN !
 class VTemplate : public BaseProject {
@@ -254,7 +257,8 @@ protected:
             MI.center = (MI.minCoords + MI.maxCoords) / 2.0f;
             MI.size = MI.maxCoords - MI.minCoords;
 
-            printf("SIZE: %f %f %f\n", MI.size.x, MI.size.y, MI.size.z);
+            MI.cylinderRadius = glm::distance(glm::vec3(MI.maxCoords.x, 0, MI.maxCoords.z), glm::vec3(MI.minCoords.x, 0, MI.minCoords.z))/2;
+            MI.cylinderHeight = MI.maxCoords.y - MI.minCoords.y;
 
             MV.push_back(MI);
             i++;
@@ -454,6 +458,8 @@ protected:
                     glm::translate(glm::mat4(1.0f), -CamPos) *
                     glm::vec4(modelPos, 1.0f);
 
+            if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
+
             for(int i = 0; i < MV.size(); i++) {
                 if(i != MoveObjIndex) {
                     if(MV[MoveObjIndex].checkCollision(MV[i])) {
@@ -462,8 +468,6 @@ protected:
                     }
                 }
             }
-
-            if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
 
             MV[MoveObjIndex].modelRot = CamAlpha;
         }
