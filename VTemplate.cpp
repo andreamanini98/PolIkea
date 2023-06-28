@@ -15,12 +15,25 @@ namespace fs = std::filesystem;
 //     mat3  : alignas(16)
 //     mat4  : alignas(16)
 struct UniformBlock {
+    alignas(4) float amb;
+    alignas(4) float gamma;
+    alignas(16) glm::vec3 sColor;
     alignas(16) glm::mat4 mvpMat;
+    alignas(16) glm::mat4 mMat;
+    alignas(16) glm::mat4 nMat;
+};
+
+struct GlobalUniformBlock {
+    alignas(16) glm::vec3 DlightDir;
+    alignas(16) glm::vec3 DlightColor;
+    alignas(16) glm::vec3 AmbLightColor;
+    alignas(16) glm::vec3 eyePos;
 };
 
 // The vertices data structures
 struct Vertex {
     glm::vec3 pos;
+    glm::vec3 norm;
     glm::vec2 UV;
 };
 
@@ -42,7 +55,7 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSL;
+    DescriptorSetLayout DSL, DSLGubo;
 
     // Vertex formats
     VertexDescriptor VD;
@@ -55,11 +68,12 @@ protected:
     // Models
     Model<Vertex> MGrid;
     // Descriptor sets
-    DescriptorSet DSGrid;
+    DescriptorSet DSGrid, DSGubo;
     // Textures
     Texture T1, T2;
     // C++ storage for uniform variables
     UniformBlock uboGrid;
+    GlobalUniformBlock gubo;
 
     // Other application parameters
     // A vector containing one element for each model loaded where we want to keep track of its information
@@ -107,7 +121,11 @@ protected:
                 // third  element : the pipeline stage where it will be used
                 //                  using the corresponding Vulkan constant
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
-                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
+                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
+        });
+        // TODO may bring the DSLGUBO to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
+        DSLGubo.init(this, {
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
 
         // Vertex descriptors
@@ -141,8 +159,10 @@ protected:
                         // ***************************************************
                         {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
                                 sizeof(glm::vec3), POSITION},
-                        {0, 1, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
-                                sizeof(glm::vec2), UV}
+                        {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, norm),
+                                sizeof(glm::vec3), NORMAL},
+                        {0, 2, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, UV),
+                                sizeof(glm::vec2), UV},
                 });
 
         // Pipelines [Shader couples]
@@ -150,7 +170,7 @@ protected:
         // Third and fourth parameters are respectively the vertex and fragment shaders
         // The last array, is a vector of pointer to the layouts of the sets that will
         // be used in this pipeline. The first element will be set 0, and so on
-        P.init(this, &VD, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSL});
+        P.init(this, &VD, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSL});
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
@@ -175,10 +195,10 @@ protected:
         }
 
         // Creates a mesh with direct enumeration of vertices and indices
-        MGrid.vertices = {{{-6, 0, -6}, {0.0f, 0.0f}},
-                          {{-6, 0, 6},  {0.0f, 1.0f}},
-                          {{6,  0, -6}, {1.0f, 0.0f}},
-                          {{6,  0, 6},  {1.0f, 1.0f}}};
+        MGrid.vertices = {{{-6, 0, -6}, {0.0, 1.0, 0.0}, {0.0f, 0.0f}},
+                          {{-6, 0, 6},  {0.0, 1.0, 0.0}, {0.0f, 1.0f}},
+                          {{6,  0, -6}, {0.0, 1.0, 0.0}, {1.0f, 0.0f}},
+                          {{6,  0, 6},  {0.0, 1.0, 0.0}, {1.0f, 1.0f}}};
         MGrid.indices = {0, 1, 2, 1, 3, 2};
         MGrid.initMesh(this, &VD);
 
@@ -206,6 +226,9 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
                 {1, TEXTURE, 0,                    &T1}
         });
+        DSGubo.init(this, &DSLGubo, {
+                {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr}
+        });
 
         for (auto &mInfo: MV) {
             mInfo.dsModel.init(this, &DSL, {
@@ -223,6 +246,7 @@ protected:
 
         // Cleanup datasets
         DSGrid.cleanup();
+        DSGubo.cleanup();
 
         for (auto &mInfo: MV)
             mInfo.dsModel.cleanup();
@@ -244,6 +268,7 @@ protected:
 
         // Cleanup descriptor set layouts
         DSL.cleanup();
+        DSLGubo.cleanup();
 
         // Destroys the pipelines
         P.destroy();
@@ -255,29 +280,31 @@ protected:
 
     void populateCommandBuffer(VkCommandBuffer commandBuffer, int currentImage) {
         // binds the pipeline
-        P.bind(commandBuffer);
         // For a pipeline object, this command binds the corresponding pipeline to the command buffer passed in its parameter
+        P.bind(commandBuffer);
 
         // binds the data set
-        DSGrid.bind(commandBuffer, P, 0, currentImage);
         // For a Dataset object, this command binds the corresponding dataset
         // to the command buffer and pipeline passed in its first and second parameters.
         // The third parameter is the number of the set being bound
         // As described in the Vulkan tutorial, a different dataset is required for each image in the swap chain.
         // This is done automatically in file Starter.hpp, however the command here needs also the index
         // of the current image in the swap chain, passed in its last parameter
+        DSGubo.bind(commandBuffer, P, 0, currentImage);
+        DSGrid.bind(commandBuffer, P, 1, currentImage);
 
         // binds the model
-        MGrid.bind(commandBuffer);
         // For a Model object, this command binds the corresponding index and vertex buffer
         // to the command buffer passed in its parameter
+        MGrid.bind(commandBuffer);
+
         vkCmdDrawIndexed(commandBuffer,
                          static_cast<uint32_t>(MGrid.indices.size()), 1, 0, 0, 0);
         // the second parameter is the number of indexes to be drawn. For a Model object,
         // this can be retrieved with the .indices.size() method.
 
         for (auto &mInfo: MV) {
-            mInfo.dsModel.bind(commandBuffer, P, 0, currentImage);
+            mInfo.dsModel.bind(commandBuffer, P, 1, currentImage);
             mInfo.model.bind(commandBuffer);
             vkCmdDrawIndexed(commandBuffer,
                              static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
@@ -323,7 +350,6 @@ protected:
         //CamPos = CamPos + MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT; //Do not allow to fly
         CamPos = CamPos + MOVE_SPEED * m.z * uz * deltaT;
         if (!OnlyMoveCam) {
-            // TODO pick the closest to the camera and move only that
             const glm::vec3 modelPos = glm::vec3(
                     CamPos.x,
                     0.0f,
@@ -340,20 +366,18 @@ protected:
             MV[MoveObjIndex].modelRot = CamAlpha;
         }
 
-        //glm::vec3 c =
-
         if (fire) {
             if (!debounce) {
                 debounce = true;
                 curDebounce = GLFW_KEY_SPACE;
                 OnlyMoveCam = !OnlyMoveCam;
 
-                if(!OnlyMoveCam) {
+                if (!OnlyMoveCam) {
                     float distance = glm::distance(CamPos, MV[0].modelPos);
                     MoveObjIndex = 0;
                     for (std::size_t i = 1; i < MV.size(); ++i) {
                         float newDistance = glm::distance(CamPos, MV[i].modelPos);
-                        if(newDistance < distance) {
+                        if (newDistance < distance) {
                             distance = newDistance;
                             MoveObjIndex = i;
                         }
@@ -367,20 +391,36 @@ protected:
             }
         }
 
+        gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
+        gubo.DlightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        gubo.AmbLightColor = glm::vec3(0.1f);
+        gubo.eyePos = CamPos;
+
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);
-
         glm::mat4 World = glm::scale(glm::mat4(1), glm::vec3(5.0f));
+
+        uboGrid.amb = 1.0f;
+        uboGrid.gamma = 180.0f;
+        uboGrid.sColor = glm::vec3(1.0f);
         uboGrid.mvpMat = ViewPrj * World;
+        uboGrid.mMat = World;
+        uboGrid.nMat = glm::inverse(glm::transpose(World));
         // the .map() method of a DataSet object, requires the current image of the swap chain as first parameter
         // the second parameter is the pointer to the C++ data structure to transfer to the GPU
         // the third parameter is its size
         // the fourth parameter is the location inside the descriptor set of this uniform block
         DSGrid.map(currentImage, &uboGrid, sizeof(uboGrid), 0);
+        DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
         for (auto &mInfo: MV) {
             World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
+            mInfo.modelUBO.amb = 1.0f;
+            mInfo.modelUBO.gamma = 180.0f;
+            mInfo.modelUBO.sColor = glm::vec3(1.0f);
             mInfo.modelUBO.mvpMat = ViewPrj * World;
+            mInfo.modelUBO.mMat = World;
+            mInfo.modelUBO.nMat = glm::inverse(glm::transpose(World));
             mInfo.dsModel.map(currentImage, &mInfo.modelUBO, sizeof(mInfo.modelUBO), 0);
         }
     }
