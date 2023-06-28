@@ -2332,7 +2332,7 @@ void Model<Vert>::init(BaseProject *bp, VertexDescriptor *vd, std::string file, 
 	} else if(MT == MGCG) {
 		loadModelGLTF(file, true);
 	}
-	
+
 	createVertexBuffer();
 	createIndexBuffer();
 }

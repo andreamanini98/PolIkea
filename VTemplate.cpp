@@ -53,6 +53,34 @@ struct ModelInfo {
     UniformBlock modelUBO{};
     glm::vec3 modelPos{};
     float modelRot = 0.0;
+
+    glm::vec3 minCoords;
+    glm::vec3 maxCoords;
+    glm::vec3 size;
+    glm::vec3 center;
+
+    glm::vec3 getMinCoordPos() const { return minCoords + modelPos; }
+    glm::vec3 getMaxCoordsPos() const { return maxCoords + modelPos; }
+
+    bool checkCollision(const ModelInfo& other) const {
+        // Check for overlap along the x-axis
+        if (getMaxCoordsPos().x < other.getMinCoordPos().x || getMinCoordPos().x > other.getMaxCoordsPos().x) {
+            return false; // No overlap along the x-axis
+        }
+
+        // Check for overlap along the y-axis
+        if (getMaxCoordsPos().y < other.getMinCoordPos().y || getMinCoordPos().y > other.getMaxCoordsPos().y) {
+            return false; // No overlap along the y-axis
+        }
+
+        // Check for overlap along the z-axis
+        if (getMaxCoordsPos().z < other.getMinCoordPos().z || getMinCoordPos().z > other.getMaxCoordsPos().z) {
+            return false; // No overlap along the z-axis
+        }
+
+        // If overlap occurs along all axes, a collision is detected
+        return true;
+    }
 };
 
 
@@ -215,6 +243,19 @@ protected:
             MI.model.init(this, &VD, entry.path(), MGCG);
             MI.modelPos = glm::vec3(0.0 + i * 2, 0.0, 0.0);
             MI.modelRot = 0.0f;
+
+            MI.minCoords = glm::vec3(std::numeric_limits<float>::max());
+            MI.maxCoords = glm::vec3(std::numeric_limits<float>::lowest());
+
+            for (const auto& vertex : MI.model.vertices) {
+                MI.minCoords = glm::min(MI.minCoords, vertex.pos);
+                MI.maxCoords = glm::max(MI.maxCoords, vertex.pos);
+            }
+            MI.center = (MI.minCoords + MI.maxCoords) / 2.0f;
+            MI.size = MI.maxCoords - MI.minCoords;
+
+            printf("SIZE: %f %f %f\n", MI.size.x, MI.size.y, MI.size.z);
+
             MV.push_back(MI);
             i++;
         }
@@ -404,12 +445,24 @@ protected:
                     CamPos.z - 2.0f
             );
 
+            glm::vec3 oldPos = MV[MoveObjIndex].modelPos;
+
             MV[MoveObjIndex].modelPos =
                     glm::translate(glm::mat4(1.0f), CamPos) *
                     glm::rotate(glm::mat4(1), CamAlpha, glm::vec3(0.0f, 1.0f, 0.0f)) *
                     glm::rotate(glm::mat4(1), CamBeta, glm::vec3(1.0f, 0.0f, 0.0f)) *
                     glm::translate(glm::mat4(1.0f), -CamPos) *
                     glm::vec4(modelPos, 1.0f);
+
+            for(int i = 0; i < MV.size(); i++) {
+                if(i != MoveObjIndex) {
+                    if(MV[MoveObjIndex].checkCollision(MV[i])) {
+                        MV[MoveObjIndex].modelPos = oldPos;
+                        break;
+                    }
+                }
+            }
+
             if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
 
             MV[MoveObjIndex].modelRot = CamAlpha;
