@@ -30,10 +30,19 @@ struct GlobalUniformBlock {
     alignas(16) glm::vec3 eyePos;
 };
 
+struct OverlayUniformBlock {
+    alignas(4) float visible;
+};
+
 // The vertices data structures
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 norm;
+    glm::vec2 UV;
+};
+
+struct VertexOverlay {
+    glm::vec2 pos;
     glm::vec2 UV;
 };
 
@@ -55,31 +64,33 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSL, DSLGubo;
+    DescriptorSetLayout DSL, DSLGubo, DSLOverlay;
 
     // Vertex formats
-    VertexDescriptor VD;
+    VertexDescriptor VD, VOverlay;
 
     // Pipelines [Shader couples]
-    Pipeline P;
+    Pipeline P, POverlay;
 
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
     // Models
     Model<Vertex> MGrid;
+    Model<VertexOverlay> MKey;
     // Descriptor sets
-    DescriptorSet DSGrid, DSGubo;
+    DescriptorSet DSGrid, DSGubo, DSKey;
     // Textures
-    Texture T1, T2;
+    Texture T1, T2, TKey;
     // C++ storage for uniform variables
     UniformBlock uboGrid;
     GlobalUniformBlock gubo;
+    OverlayUniformBlock uboKey;
 
     // Other application parameters
     // A vector containing one element for each model loaded where we want to keep track of its information
     std::vector<ModelInfo> MV;
 
-    glm::vec3 CamPos = glm::vec3(0.440019, 0.5, 3.45706);;
+    glm::vec3 CamPos = glm::vec3(2.0, 0.7, 3.45706);;
     float CamAlpha = 0.0f;
     float CamBeta = 0.0f;
     float CamRho = 0.0f;
@@ -127,6 +138,10 @@ protected:
         DSLGubo.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
+        DSLOverlay.init(this, {
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
+                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
+        });
 
         // Vertex descriptors
         VD.init(this, {
@@ -161,9 +176,18 @@ protected:
                                 sizeof(glm::vec3), POSITION},
                         {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, norm),
                                 sizeof(glm::vec3), NORMAL},
-                        {0, 2, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, UV),
+                        {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
                                 sizeof(glm::vec2), UV},
                 });
+
+        VOverlay.init(this, {
+                {0, sizeof(VertexOverlay), VK_VERTEX_INPUT_RATE_VERTEX}
+        }, {
+                              {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(VertexOverlay, pos),
+                                      sizeof(glm::vec2), OTHER},
+                              {0, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(VertexOverlay, UV),
+                                      sizeof(glm::vec2), UV}
+                      });
 
         // Pipelines [Shader couples]
         // The second parameter is the pointer to the vertex definition
@@ -171,13 +195,14 @@ protected:
         // The last array, is a vector of pointer to the layouts of the sets that will
         // be used in this pipeline. The first element will be set 0, and so on
         P.init(this, &VD, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSL});
+        POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
         // Create models
         // TODO maybe move to external function
         int i = 0;
-        std::string path = "models";
+        std::string path = "models/furniture";
         for (const auto &entry: fs::directory_iterator(path)) {
             // Added this check since in MacOS this hidden file could be created in a directory
             if (static_cast<std::string>(entry.path()).find("DS_Store") != std::string::npos)
@@ -202,10 +227,18 @@ protected:
         MGrid.indices = {0, 1, 2, 1, 3, 2};
         MGrid.initMesh(this, &VD);
 
+        MKey.vertices = {{{-0.8f, 0.70f}, {0.0f, 0.0f}},
+                         {{-0.8f, 0.93f}, {0.0f, 1.0f}},
+                         {{0.8f,  0.70f}, {1.0f, 0.0f}},
+                         {{0.8f,  0.93f}, {1.0f, 1.0f}}};
+        MKey.indices = {0, 1, 2, 3, 2, 1};
+        MKey.initMesh(this, &VOverlay);
+
         // Create the textures
         // The second parameter is the file name
         T1.init(this, "textures/Checker.png");
         T2.init(this, "textures/Textures_Forniture.png");
+        TKey.init(this, "textures/MoveBanner.png");
 
         // Init local variables
     }
@@ -214,6 +247,7 @@ protected:
     void pipelinesAndDescriptorSetsInit() {
         // This creates a new pipeline (with the current surface), using its shaders
         P.create();
+        POverlay.create();
 
         // Here you define the data set
         DSGrid.init(this, &DSL, {
@@ -229,6 +263,10 @@ protected:
         DSGubo.init(this, &DSLGubo, {
                 {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr}
         });
+        DSKey.init(this, &DSLOverlay, {
+                {0, UNIFORM, sizeof(OverlayUniformBlock), nullptr},
+                {1, TEXTURE, 0,                           &TKey}
+        });
 
         for (auto &mInfo: MV) {
             mInfo.dsModel.init(this, &DSL, {
@@ -243,13 +281,14 @@ protected:
     void pipelinesAndDescriptorSetsCleanup() {
         // Cleanup pipelines
         P.cleanup();
+        POverlay.cleanup();
 
         // Cleanup datasets
         DSGrid.cleanup();
         DSGubo.cleanup();
+        DSKey.cleanup();
 
-        for (auto &mInfo: MV)
-            mInfo.dsModel.cleanup();
+        for (auto &mInfo: MV) mInfo.dsModel.cleanup();
     }
 
     // Here you destroy all the Models, Texture and Desc. Set Layouts you created!
@@ -260,18 +299,21 @@ protected:
         // Cleanup textures
         T1.cleanup();
         T2.cleanup();
+        TKey.cleanup();
 
         // Cleanup models
         MGrid.cleanup();
-        for (auto &mInfo: MV)
-            mInfo.model.cleanup();
+        MKey.cleanup();
+        for (auto &mInfo: MV) mInfo.model.cleanup();
 
         // Cleanup descriptor set layouts
         DSL.cleanup();
         DSLGubo.cleanup();
+        DSLOverlay.cleanup();
 
         // Destroys the pipelines
         P.destroy();
+        POverlay.cleanup();
     }
 
     // Here it is the creation of the command buffer:
@@ -309,6 +351,12 @@ protected:
             vkCmdDrawIndexed(commandBuffer,
                              static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
+
+        POverlay.bind(commandBuffer);
+        MKey.bind(commandBuffer);
+        DSKey.bind(commandBuffer, POverlay, 0, currentImage);
+        vkCmdDrawIndexed(commandBuffer,
+                         static_cast<uint32_t>(MKey.indices.size()), 1, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
@@ -347,7 +395,7 @@ protected:
         glm::vec3 ux = glm::rotate(glm::mat4(1.0f), CamAlpha, glm::vec3(0, 1, 0)) * glm::vec4(1, 0, 0, 1);
         glm::vec3 uz = glm::rotate(glm::mat4(1.0f), CamAlpha, glm::vec3(0, 1, 0)) * glm::vec4(0, 0, -1, 1);
         CamPos = CamPos + MOVE_SPEED * m.x * ux * deltaT;
-        //CamPos = CamPos + MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT; //Do not allow to fly
+        CamPos = CamPos + MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT; //Do not allow to fly
         CamPos = CamPos + MOVE_SPEED * m.z * uz * deltaT;
         if (!OnlyMoveCam) {
             const glm::vec3 modelPos = glm::vec3(
@@ -362,10 +410,12 @@ protected:
                     glm::rotate(glm::mat4(1), CamBeta, glm::vec3(1.0f, 0.0f, 0.0f)) *
                     glm::translate(glm::mat4(1.0f), -CamPos) *
                     glm::vec4(modelPos, 1.0f);
+            if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
 
             MV[MoveObjIndex].modelRot = CamAlpha;
         }
 
+        float threshold = 2.0f;
         if (fire) {
             if (!debounce) {
                 debounce = true;
@@ -382,6 +432,7 @@ protected:
                             MoveObjIndex = i;
                         }
                     }
+                    if (distance > threshold) OnlyMoveCam = true;
                 }
             }
         } else {
@@ -399,6 +450,18 @@ protected:
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);
         glm::mat4 World = glm::scale(glm::mat4(1), glm::vec3(5.0f));
+
+        bool displayKey = false;
+        for (std::size_t i = 1; i < MV.size(); ++i) {
+            float distance = glm::distance(CamPos, MV[i].modelPos);
+            if (distance <= threshold) {
+                displayKey = true;
+                break;
+            }
+        }
+
+        uboKey.visible = (OnlyMoveCam && displayKey) ? 1.0f : 0.0f;
+        DSKey.map(currentImage, &uboKey, sizeof(uboKey), 0);
 
         uboGrid.amb = 1.0f;
         uboGrid.gamma = 180.0f;
