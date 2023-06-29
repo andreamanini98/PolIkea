@@ -4,6 +4,8 @@
 #include "Starter.hpp"
 #include "WorldView.hpp"
 
+#define N_SPOTLIGHTS 3
+
 namespace fs = std::filesystem;
 
 // The uniform buffer objects data structures
@@ -23,20 +25,24 @@ struct UniformBlock {
     alignas(16) glm::mat4 nMat;
 };
 
-struct GlobalUniformBlock {
-    alignas(16) glm::vec3 DlightDir;
-    alignas(16) glm::vec3 DlightColor;
-    alignas(16) glm::vec3 AmbLightColor;
-    alignas(16) glm::vec3 eyePos;
-};
-
-struct GlobalUniformBlockSpot {
+struct SpotLight {
+    alignas(4) float beta;   // decay exponent of the spotlight
+    alignas(4) float g;      // target distance of the spotlight
+    alignas(4) float cosout; // cosine of the outer angle of the spotlight
+    alignas(4) float cosin;  // cosine of the inner angle of the spotlight
     alignas(16) glm::vec3 lightPos;
     alignas(16) glm::vec3 lightDir;
     alignas(16) glm::vec4 lightColor;
     alignas(16) glm::vec3 eyePos;
 };
 
+struct GlobalUniformBlock {
+    alignas(16) glm::vec3 DlightDir;
+    alignas(16) glm::vec3 DlightColor;
+    alignas(16) glm::vec3 AmbLightColor;
+    alignas(16) glm::vec3 eyePos;
+    SpotLight lights[N_SPOTLIGHTS];
+};
 
 struct OverlayUniformBlock {
     alignas(4) float visible;
@@ -70,9 +76,10 @@ struct ModelInfo {
     glm::vec3 center;
 
     glm::vec3 getMinCoordPos() const { return minCoords + modelPos; }
+
     glm::vec3 getMaxCoordsPos() const { return maxCoords + modelPos; }
 
-    bool checkCollision(const ModelInfo& other) const {
+    bool checkCollision(const ModelInfo &other) const {
         // Cylindrical body collision check
         glm::vec3 centerHoriz = glm::vec3(modelPos.x + center.x, 0.0, modelPos.z + center.z);
         glm::vec3 centerHorizB = glm::vec3(other.modelPos.x + other.center.x, 0.0, other.modelPos.z + other.center.z);
@@ -85,7 +92,8 @@ struct ModelInfo {
         // Top and bottom cap collision check
         float heightA = cylinderHeight;
         float heightB = other.cylinderHeight;
-        float distCaps = std::abs(modelPos.y + center.y - other.modelPos.y - other.center.y) - (heightA + heightB) * 0.5f;
+        float distCaps =
+                std::abs(modelPos.y + center.y - other.modelPos.y - other.center.y) - (heightA + heightB) * 0.5f;
         if (distCaps > 0.0f) {
             return false; // Top and bottom caps don't intersect, no collision
         }
@@ -123,7 +131,6 @@ protected:
     // C++ storage for uniform variables
     UniformBlock uboGrid;
     GlobalUniformBlock gubo;
-    GlobalUniformBlockSpot guboSpot1, guboSpot2;
     OverlayUniformBlock uboKey;
 
     // Other application parameters
@@ -144,8 +151,7 @@ protected:
         windowHeight = 600;
         windowTitle = "PolIkea";
         windowResizable = GLFW_TRUE;
-        //initialBackgroundColor = {0.4f, 1.0f, 1.0f, 1.0f};
-        initialBackgroundColor = {0.0f, 0.0f, 0.0f, 1.0f};
+        initialBackgroundColor = {0.4f, 1.0f, 1.0f, 1.0f};
 
         // Descriptor pool sizes
         // TODO resize to match the actual descriptors used in the code
@@ -177,8 +183,7 @@ protected:
         });
         // TODO may bring the DSLGUBO to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
         DSLGubo.init(this, {
-                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS},
-                {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
         DSLOverlay.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
@@ -261,14 +266,15 @@ protected:
             MI.minCoords = glm::vec3(std::numeric_limits<float>::max());
             MI.maxCoords = glm::vec3(std::numeric_limits<float>::lowest());
 
-            for (const auto& vertex : MI.model.vertices) {
+            for (const auto &vertex: MI.model.vertices) {
                 MI.minCoords = glm::min(MI.minCoords, vertex.pos);
                 MI.maxCoords = glm::max(MI.maxCoords, vertex.pos);
             }
             MI.center = (MI.minCoords + MI.maxCoords) / 2.0f;
             MI.size = MI.maxCoords - MI.minCoords;
 
-            MI.cylinderRadius = glm::distance(glm::vec3(MI.maxCoords.x, 0, MI.maxCoords.z), glm::vec3(MI.minCoords.x, 0, MI.minCoords.z))/2;
+            MI.cylinderRadius = glm::distance(glm::vec3(MI.maxCoords.x, 0, MI.maxCoords.z),
+                                              glm::vec3(MI.minCoords.x, 0, MI.minCoords.z)) / 2;
             MI.cylinderHeight = MI.maxCoords.y - MI.minCoords.y;
 
             MV.push_back(MI);
@@ -283,10 +289,10 @@ protected:
         MGrid.indices = {0, 1, 2, 1, 3, 2};
         MGrid.initMesh(this, &VD);
 
-        MKey.vertices = {{{-0.8f, 0.70f}, {0.0f, 0.0f}},
-                         {{-0.8f, 0.93f}, {0.0f, 1.0f}},
-                         {{0.8f,  0.70f}, {1.0f, 0.0f}},
-                         {{0.8f,  0.93f}, {1.0f, 1.0f}}};
+        MKey.vertices = {{{-0.7f, 0.70f}, {0.0f, 0.0f}},
+                         {{-0.7f, 0.93f}, {0.0f, 1.0f}},
+                         {{0.7f,  0.70f}, {1.0f, 0.0f}},
+                         {{0.7f,  0.93f}, {1.0f, 1.0f}}};
         MKey.indices = {0, 1, 2, 3, 2, 1};
         MKey.initMesh(this, &VOverlay);
 
@@ -317,8 +323,7 @@ protected:
                 {1, TEXTURE, 0,                    &T1}
         });
         DSGubo.init(this, &DSLGubo, {
-                {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr},
-                {1, UNIFORM, sizeof(GlobalUniformBlockSpot), nullptr}
+                {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr}
         });
         DSKey.init(this, &DSLOverlay, {
                 {0, UNIFORM, sizeof(OverlayUniformBlock), nullptr},
@@ -472,9 +477,9 @@ protected:
 
             if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
 
-            for(int i = 0; i < MV.size(); i++) {
-                if(i != MoveObjIndex) {
-                    if(MV[MoveObjIndex].checkCollision(MV[i])) {
+            for (int i = 0; i < MV.size(); i++) {
+                if (i != MoveObjIndex) {
+                    if (MV[MoveObjIndex].checkCollision(MV[i])) {
                         MV[MoveObjIndex].modelPos = oldPos;
                         break;
                     }
@@ -516,15 +521,16 @@ protected:
         gubo.AmbLightColor = glm::vec3(0.1f);
         gubo.eyePos = CamPos;
 
-        guboSpot1.lightPos = glm::vec3(0.5f,4.92f,0.12f);
-        guboSpot1.lightDir = glm::vec3(0, 1, 0);
-        guboSpot1.lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-        guboSpot1.eyePos = CamPos;
-
-        guboSpot2.lightPos = glm::vec3(7.5f,2.92f,0.12f);
-        guboSpot2.lightDir = glm::vec3(0, 1, 0);
-        guboSpot2.lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-        guboSpot2.eyePos = CamPos;
+        for (int i = 0; i < N_SPOTLIGHTS; i++) {
+            gubo.lights[i].beta = 3.5f;
+            gubo.lights[i].g = 3;
+            gubo.lights[i].cosout = 0.8f;
+            gubo.lights[i].cosin = 0.85f;
+            gubo.lights[i].lightPos = glm::vec3(0.5f, 1.92f, 0.12f + static_cast<float>(i) * 5.0f);
+            gubo.lights[i].lightDir = glm::vec3(0, 1, 0);
+            gubo.lights[i].lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+            gubo.lights[i].eyePos = CamPos;
+        }
 
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);
@@ -554,8 +560,6 @@ protected:
         // the fourth parameter is the location inside the descriptor set of this uniform block
         DSGrid.map(currentImage, &uboGrid, sizeof(uboGrid), 0);
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
-        DSGubo.map(currentImage, &guboSpot1, sizeof(guboSpot1), 1);
-        DSGubo.map(currentImage, &guboSpot2, sizeof(guboSpot2), 1);
 
         for (auto &mInfo: MV) {
             World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
