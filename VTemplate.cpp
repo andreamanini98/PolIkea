@@ -30,6 +30,14 @@ struct GlobalUniformBlock {
     alignas(16) glm::vec3 eyePos;
 };
 
+struct GlobalUniformBlockSpot {
+    alignas(16) glm::vec3 lightPos;
+    alignas(16) glm::vec3 lightDir;
+    alignas(16) glm::vec4 lightColor;
+    alignas(16) glm::vec3 eyePos;
+};
+
+
 struct OverlayUniformBlock {
     alignas(4) float visible;
 };
@@ -115,6 +123,7 @@ protected:
     // C++ storage for uniform variables
     UniformBlock uboGrid;
     GlobalUniformBlock gubo;
+    GlobalUniformBlockSpot guboSpot1, guboSpot2;
     OverlayUniformBlock uboKey;
 
     // Other application parameters
@@ -135,7 +144,8 @@ protected:
         windowHeight = 600;
         windowTitle = "PolIkea";
         windowResizable = GLFW_TRUE;
-        initialBackgroundColor = {0.4f, 1.0f, 1.0f, 1.0f};
+        //initialBackgroundColor = {0.4f, 1.0f, 1.0f, 1.0f};
+        initialBackgroundColor = {0.0f, 0.0f, 0.0f, 1.0f};
 
         // Descriptor pool sizes
         // TODO resize to match the actual descriptors used in the code
@@ -167,7 +177,8 @@ protected:
         });
         // TODO may bring the DSLGUBO to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
         DSLGubo.init(this, {
-                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS},
+                {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
         DSLOverlay.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
@@ -306,7 +317,8 @@ protected:
                 {1, TEXTURE, 0,                    &T1}
         });
         DSGubo.init(this, &DSLGubo, {
-                {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr}
+                {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr},
+                {1, UNIFORM, sizeof(GlobalUniformBlockSpot), nullptr}
         });
         DSKey.init(this, &DSLOverlay, {
                 {0, UNIFORM, sizeof(OverlayUniformBlock), nullptr},
@@ -504,6 +516,16 @@ protected:
         gubo.AmbLightColor = glm::vec3(0.1f);
         gubo.eyePos = CamPos;
 
+        guboSpot1.lightPos = glm::vec3(0.5f,4.92f,0.12f);
+        guboSpot1.lightDir = glm::vec3(0, 1, 0);
+        guboSpot1.lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        guboSpot1.eyePos = CamPos;
+
+        guboSpot2.lightPos = glm::vec3(7.5f,2.92f,0.12f);
+        guboSpot2.lightDir = glm::vec3(0, 1, 0);
+        guboSpot2.lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        guboSpot2.eyePos = CamPos;
+
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);
         glm::mat4 World = glm::scale(glm::mat4(1), glm::vec3(5.0f));
@@ -532,6 +554,8 @@ protected:
         // the fourth parameter is the location inside the descriptor set of this uniform block
         DSGrid.map(currentImage, &uboGrid, sizeof(uboGrid), 0);
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
+        DSGubo.map(currentImage, &guboSpot1, sizeof(guboSpot1), 1);
+        DSGubo.map(currentImage, &guboSpot2, sizeof(guboSpot2), 1);
 
         for (auto &mInfo: MV) {
             World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
