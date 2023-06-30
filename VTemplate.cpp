@@ -60,6 +60,12 @@ struct VertexOverlay {
     glm::vec2 UV;
 };
 
+struct VertexVColor {
+    glm::vec3 pos;
+    glm::vec3 norm;
+    glm::vec3 color;
+};
+
 // Struct used to store data related to a model
 struct ModelInfo {
     Model<Vertex> model;
@@ -111,25 +117,26 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSL, DSLGubo, DSLOverlay;
+    DescriptorSetLayout DSL, DSLGubo, DSLOverlay, DSLVColor;
 
     // Vertex formats
-    VertexDescriptor VD, VOverlay;
+    VertexDescriptor VD, VOverlay, VVColor;
 
     // Pipelines [Shader couples]
-    Pipeline P, POverlay;
+    Pipeline P, POverlay, PVColor;
 
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
     // Models
     Model<Vertex> MGrid;
     Model<VertexOverlay> MKey;
+    Model<VertexVColor> Polikea;
     // Descriptor sets
-    DescriptorSet DSGrid, DSGubo, DSKey;
+    DescriptorSet DSGrid, DSGubo, DSKey, DSPolikea;
     // Textures
     Texture T1, T2, TKey;
     // C++ storage for uniform variables
-    UniformBlock uboGrid;
+    UniformBlock uboGrid, uboPolikea;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
 
@@ -189,6 +196,10 @@ protected:
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
         });
+        // TODO may bring the DSLVColor to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
+        DSLVColor.init(this, {
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
+        });
 
         // Vertex descriptors
         VD.init(this, {
@@ -236,6 +247,17 @@ protected:
                                       sizeof(glm::vec2), UV}
                       });
 
+        VVColor.init(this, {
+                {0, sizeof(VertexVColor), VK_VERTEX_INPUT_RATE_VERTEX}
+        }, {
+                             {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, pos),
+                                     sizeof(glm::vec3), POSITION},
+                             {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, norm),
+                                     sizeof(glm::vec3), NORMAL},
+                             {0, 2, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, color),
+                                     sizeof(glm::vec3), COLOR}
+                     });
+
         // Pipelines [Shader couples]
         // The second parameter is the pointer to the vertex definition
         // Third and fourth parameters are respectively the vertex and fragment shaders
@@ -244,6 +266,7 @@ protected:
         P.init(this, &VD, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSL});
         POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
+        PVColor.init(this, &VVColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv", {&DSLGubo, &DSLVColor});
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
@@ -297,6 +320,8 @@ protected:
         MKey.indices = {0, 1, 2, 3, 2, 1};
         MKey.initMesh(this, &VOverlay);
 
+        Polikea.init(this, &VVColor, "models/polikea.obj", OBJ);
+
         // Create the textures
         // The second parameter is the file name
         T1.init(this, "textures/Checker.png");
@@ -311,6 +336,7 @@ protected:
         // This creates a new pipeline (with the current surface), using its shaders
         P.create();
         POverlay.create();
+        PVColor.create();
 
         // Here you define the data set
         DSGrid.init(this, &DSL, {
@@ -330,6 +356,9 @@ protected:
                 {0, UNIFORM, sizeof(OverlayUniformBlock), nullptr},
                 {1, TEXTURE, 0,                           &TKey}
         });
+        DSPolikea.init(this, &DSLVColor, {
+                {0, UNIFORM, sizeof(UniformBlock), nullptr}
+        });
 
         for (auto &mInfo: MV) {
             mInfo.dsModel.init(this, &DSL, {
@@ -345,11 +374,13 @@ protected:
         // Cleanup pipelines
         P.cleanup();
         POverlay.cleanup();
+        PVColor.cleanup();
 
         // Cleanup datasets
         DSGrid.cleanup();
         DSGubo.cleanup();
         DSKey.cleanup();
+        DSPolikea.cleanup();
 
         for (auto &mInfo: MV) mInfo.dsModel.cleanup();
     }
@@ -367,16 +398,19 @@ protected:
         // Cleanup models
         MGrid.cleanup();
         MKey.cleanup();
+        Polikea.cleanup();
         for (auto &mInfo: MV) mInfo.model.cleanup();
 
         // Cleanup descriptor set layouts
         DSL.cleanup();
         DSLGubo.cleanup();
         DSLOverlay.cleanup();
+        DSLVColor.cleanup();
 
         // Destroys the pipelines
         P.destroy();
-        POverlay.cleanup();
+        POverlay.destroy();
+        PVColor.destroy();
     }
 
     // Here it is the creation of the command buffer:
@@ -402,7 +436,6 @@ protected:
         // For a Model object, this command binds the corresponding index and vertex buffer
         // to the command buffer passed in its parameter
         MGrid.bind(commandBuffer);
-
         vkCmdDrawIndexed(commandBuffer,
                          static_cast<uint32_t>(MGrid.indices.size()), 1, 0, 0, 0);
         // the second parameter is the number of indexes to be drawn. For a Model object,
@@ -420,6 +453,14 @@ protected:
         DSKey.bind(commandBuffer, POverlay, 0, currentImage);
         vkCmdDrawIndexed(commandBuffer,
                          static_cast<uint32_t>(MKey.indices.size()), 1, 0, 0, 0);
+
+        PVColor.bind(commandBuffer);
+        // TODO check this DSGubo bind
+        DSGubo.bind(commandBuffer, PVColor, 0, currentImage);
+        DSPolikea.bind(commandBuffer, PVColor, 1, currentImage);
+        Polikea.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer,
+                         static_cast<uint32_t>(Polikea.indices.size()), 1, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
@@ -536,6 +577,14 @@ protected:
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);
         glm::mat4 World = glm::scale(glm::mat4(1), glm::vec3(5.0f));
+
+        uboPolikea.amb = 1.0f;
+        uboPolikea.gamma = 180.0f;
+        uboPolikea.sColor = glm::vec3(1.0f);
+        uboPolikea.mvpMat = ViewPrj * glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
+        uboPolikea.mMat = glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
+        uboPolikea.nMat = glm::inverse(glm::transpose(World));
+        DSPolikea.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
 
         bool displayKey = false;
         for (std::size_t i = 1; i < MV.size(); ++i) {
