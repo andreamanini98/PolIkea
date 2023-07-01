@@ -33,7 +33,6 @@ struct SpotLight {
     alignas(16) glm::vec3 lightPos;
     alignas(16) glm::vec3 lightDir;
     alignas(16) glm::vec4 lightColor;
-    alignas(16) glm::vec3 eyePos;
 };
 
 struct GlobalUniformBlock {
@@ -560,7 +559,7 @@ protected:
 
         gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
         gubo.DlightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-        gubo.AmbLightColor = glm::vec3(0.1f);
+        gubo.AmbLightColor = glm::vec3(0.8f);
         gubo.eyePos = CamPos;
 
         for (int i = 0; i < N_SPOTLIGHTS; i++) {
@@ -571,14 +570,13 @@ protected:
             gubo.lights[i].lightPos = glm::vec3(0.5f, 1.92f, 0.12f + static_cast<float>(i) * 5.0f);
             gubo.lights[i].lightDir = glm::vec3(0, 1, 0);
             gubo.lights[i].lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-            gubo.lights[i].eyePos = CamPos;
         }
 
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);
         glm::mat4 World = glm::scale(glm::mat4(1), glm::vec3(5.0f));
 
-        uboPolikea.amb = 1.0f;
+        uboPolikea.amb = 0.05f;
         uboPolikea.gamma = 180.0f;
         uboPolikea.sColor = glm::vec3(1.0f);
         uboPolikea.mvpMat = ViewPrj * glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
@@ -598,7 +596,7 @@ protected:
         uboKey.visible = (OnlyMoveCam && displayKey) ? 1.0f : 0.0f;
         DSKey.map(currentImage, &uboKey, sizeof(uboKey), 0);
 
-        uboGrid.amb = 1.0f;
+        uboGrid.amb = 0.05f;
         uboGrid.gamma = 180.0f;
         uboGrid.sColor = glm::vec3(1.0f);
         uboGrid.mvpMat = ViewPrj * World;
@@ -613,7 +611,7 @@ protected:
 
         for (auto &mInfo: MV) {
             World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
-            mInfo.modelUBO.amb = 1.0f;
+            mInfo.modelUBO.amb = 0.05f;
             mInfo.modelUBO.gamma = 180.0f;
             mInfo.modelUBO.sColor = glm::vec3(1.0f);
             mInfo.modelUBO.mvpMat = ViewPrj * World;
