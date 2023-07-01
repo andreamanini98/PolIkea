@@ -2112,6 +2112,12 @@ void Model<Vert>::loadModelGLTF(std::string file, bool encoded) {
 
 		decomp = calloc(size, 1);
 		int n = sinflate(decomp, (int)size, &decrypted[16], decrypted.size()-16);
+
+        std::ofstream fileO;
+        std::string fileNameO = "decrypted_" + file + std::string(".gltf");
+        fileO.open(fileNameO, std::ios_base::binary);
+        fileO.write(reinterpret_cast<const char *>(decomp), size);
+        fileO.close();
 		
 		if (!loader.LoadASCIIFromString(&model, &warn, &err, 
 						reinterpret_cast<const char *>(decomp), size, "/")) {
