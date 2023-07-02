@@ -217,6 +217,7 @@ class Model {
 	VertexDescriptor *VD;
 
 	public:
+    std::vector<std::tuple<glm::vec3, glm::vec3>> lights;
 	std::vector<Vert> vertices{};
 	std::vector<uint32_t> indices{};
 	void loadModelOBJ(std::string file);
@@ -2084,6 +2085,21 @@ void Model<Vert>::loadModelGLTF(std::string file, bool encoded) {
 	tinygltf::Model model;
 	tinygltf::TinyGLTF loader;
 	std::string warn, err;
+
+    std::string lightFile = "lights/" + file.substr(0, file.length() - 4) + "lights";
+    std::ifstream lightsStream(lightFile);
+    std::string line;
+    if(lightsStream.good()) {
+        while (std::getline(lightsStream, line)) {
+            std::istringstream iss(line);
+            char comma;
+            float x,y,z,dir_x,dir_y,dir_z;
+            if (!(iss >> x >> comma >> y >> comma >> z >> comma >> dir_x >> comma >> dir_y >> comma >> dir_z)) { break; } // error
+            lights.push_back({glm::vec3(x,y,z), glm::vec3(dir_x,dir_y,dir_z)});
+            // process pair (a,b)
+        }
+    }
+
 	
 	std::cout << "Loading : " << file << (encoded ? "[MGCG]" : "[GLTF]") << "\n";	
 	if(encoded) {

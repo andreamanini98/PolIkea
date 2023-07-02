@@ -4,7 +4,7 @@
 #include "Starter.hpp"
 #include "WorldView.hpp"
 
-#define N_SPOTLIGHTS 3
+#define N_SPOTLIGHTS 50
 
 namespace fs = std::filesystem;
 
@@ -41,6 +41,7 @@ struct GlobalUniformBlock {
     alignas(16) glm::vec3 AmbLightColor;
     alignas(16) glm::vec3 eyePos;
     SpotLight lights[N_SPOTLIGHTS];
+    alignas(4) int nLights;
 };
 
 struct OverlayUniformBlock {
@@ -263,6 +264,7 @@ protected:
         // The last array, is a vector of pointer to the layouts of the sets that will
         // be used in this pipeline. The first element will be set 0, and so on
         P.init(this, &VD, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSL});
+        P.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
         POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
         PVColor.init(this, &VVColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv", {&DSLGubo, &DSLVColor});
@@ -272,7 +274,7 @@ protected:
         // Create models
         // TODO maybe move to external function
         int i = 0;
-        std::string path = "models/furniture";
+        std::string path = "models/lights";
         for (const auto &entry: fs::directory_iterator(path)) {
             // Added this check since in MacOS this hidden file could be created in a directory
             if (static_cast<std::string>(entry.path()).find("DS_Store") != std::string::npos)
@@ -299,6 +301,8 @@ protected:
             MI.cylinderRadius = glm::distance(glm::vec3(MI.maxCoords.x, 0, MI.maxCoords.z),
                                               glm::vec3(MI.minCoords.x, 0, MI.minCoords.z)) / 2;
             MI.cylinderHeight = MI.maxCoords.y - MI.minCoords.y;
+
+            MI.modelPos += glm::vec3(0.0, -std::min(0.0f, MI.minCoords.y), 0.0);
 
             MV.push_back(MI);
             i++;
@@ -559,18 +563,23 @@ protected:
 
         gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
         gubo.DlightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-        gubo.AmbLightColor = glm::vec3(0.8f);
+        gubo.AmbLightColor = glm::vec3(0.2f);
         gubo.eyePos = CamPos;
 
-        for (int i = 0; i < N_SPOTLIGHTS; i++) {
-            gubo.lights[i].beta = 3.5f;
-            gubo.lights[i].g = 3;
-            gubo.lights[i].cosout = 0.8f;
-            gubo.lights[i].cosin = 0.85f;
-            gubo.lights[i].lightPos = glm::vec3(0.5f, 1.92f, 0.12f + static_cast<float>(i) * 5.0f);
-            gubo.lights[i].lightDir = glm::vec3(0, 1, 0);
-            gubo.lights[i].lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        size_t index = 0;
+        for(auto& modelInfo : MV) {
+            for(auto light: modelInfo.model.lights) {
+                gubo.lights[index].beta = 3.5f;
+                gubo.lights[index].g = 3;
+                gubo.lights[index].cosout = 0.6f;
+                gubo.lights[index].cosin = 0.85f;
+                gubo.lights[index].lightPos = std::get<0>(light) + modelInfo.modelPos;
+                gubo.lights[index].lightDir = std::get<1>(light);
+                gubo.lights[index].lightColor = glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
+                index++;
+            }
         }
+        gubo.nLights = index;
 
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);
