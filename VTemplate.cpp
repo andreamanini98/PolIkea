@@ -570,16 +570,16 @@ protected:
         for(auto& modelInfo : MV) {
             for(auto light: modelInfo.model.lights) {
                 if(light.type == SPOT) {
-                    gubo.lights[indexSpot].beta = 3.5f;
-                    gubo.lights[indexSpot].g = 3;
-                    gubo.lights[indexSpot].cosout = 0.6f;
-                    gubo.lights[indexSpot].cosin = 0.85f;
+                    gubo.lights[indexSpot].beta = light.parameters.spot.beta;
+                    gubo.lights[indexSpot].g = light.parameters.spot.g;
+                    gubo.lights[indexSpot].cosout = light.parameters.spot.cosout;
+                    gubo.lights[indexSpot].cosin = light.parameters.spot.cosin;
                     gubo.lights[indexSpot].lightPos = glm::vec3(
                             glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
                             glm::vec4(light.position, 1.0f)) + modelInfo.modelPos;
                     gubo.lights[indexSpot].lightDir = glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
                                                       glm::vec4(light.direction, 1.0f);
-                    gubo.lights[indexSpot].lightColor = glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
+                    gubo.lights[indexSpot].lightColor = glm::vec4(light.lightColor, 1.0f);
                     indexSpot++;
                 }
             }
