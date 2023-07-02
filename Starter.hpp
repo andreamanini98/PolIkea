@@ -41,7 +41,9 @@
 
 #define SINFL_IMPLEMENTATION
 #include <sinfl.h>
+#include <nlohmann/json.hpp>
 
+using json = nlohmann::json;
 
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -218,7 +220,7 @@ struct SpotLightParameters {
     float cosout;
     float cosin;
 };
-enum LightType { EMPTY, POINT, SPOT };
+enum LightType { POINT, SPOT };
 
 struct LightParameters {
     glm::vec3 position;
@@ -2115,54 +2117,32 @@ void Model<Vert>::loadModelGLTF(std::string file, bool encoded) {
     std::ifstream lightsStream(lightFile);
     std::string line;
     if(lightsStream.good()) {
-        while (std::getline(lightsStream, line)) {
-            std::istringstream iss(line);
-            char comma;
-            float x,y,z,dir_x,dir_y,dir_z;
-            if (!(iss >> x >> comma >> y >> comma >> z >> comma >> dir_x >> comma >> dir_y >> comma >> dir_z)) {
-                std::cout << "ERROR! INVALID light POS+DIRECTION " << file << "\n";
-                break;
-            } // error
+        json data = json::parse(lightsStream);
+
+        for (auto& element : data) {
+            std::cout << element << '\n';
 
             LightParameters parameters{};
-            parameters.position = glm::vec3(x,y,z);
-            parameters.direction = glm::vec3(dir_x,dir_y,dir_z);
+            parameters.position = glm::vec3(element["x"], element["y"], element["z"]);
+            parameters.direction = glm::vec3(element["dir_x"], element["dir_y"], element["dir_z"]);
 
-
-            float light_x = 1.0f, light_y = 1.0f, light_z = 1.0f;
-            if (iss >> comma >> light_x >> comma >> light_y >> comma >> light_z) {
-                parameters.lightColor = glm::vec3(light_x, light_y, light_z);
+            if(element.contains("light_x")) {
+                parameters.lightColor = glm::vec3(element["light_x"], element["light_y"], element["light_z"]);
+            } else {
+                parameters.lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
             }
 
-            int type;
-            if(iss >> comma >> type) {
-                if(type == 0) {
-                    parameters.type = LightType::POINT;
-                    float g, beta;
-                    if (!(iss >> comma >> g >> comma >> beta)) {
-                        std::cout << "ERROR! INVALID point light PARAMETERS " << file << "\n";
-                        break;
-                    } // error
-
-                    parameters.parameters.point = PointLightParameters{g, beta};
-                } else if(type == 1) {
-                    parameters.type = LightType::SPOT;
-                    float g_spot,beta_spot, cosout, cosin;
-                    if (!(iss >> comma >> g_spot >> comma >> beta_spot >> comma >> cosout >> comma >> cosin)) {
-                        std::cout << "ERROR! INVALID spot light PARAMETERS "<< file << "\n";
-                        break;
-                    } // error
-
-                    parameters.parameters.spot = SpotLightParameters { g_spot, beta_spot, cosout, cosin };
-                }
-            } else {
-                //DEFAULT
+            if(element.contains("spot")) {
+                auto spot = element["spot"];
                 parameters.type = LightType::SPOT;
-                parameters.parameters.spot = SpotLightParameters { 3.5f, 3, 0.6f, 0.85f };
+                parameters.parameters.spot = SpotLightParameters { spot["g"], spot["beta"], spot["cosout"], spot["cosin"] };
+            } else if(element.contains("point")) {
+                auto point = element["point"];
+                parameters.type = LightType::POINT;
+                parameters.parameters.point = PointLightParameters { point["g"], point["beta"] };
             }
 
             lights.push_back(parameters);
-            // process pair (a,b)
         }
     }
 	
