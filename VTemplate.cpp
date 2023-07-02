@@ -507,7 +507,7 @@ protected:
         if (!OnlyMoveCam) {
             const glm::vec3 modelPos = glm::vec3(
                     CamPos.x,
-                    0.0f,
+                    CamPos.y - 0.7f,
                     CamPos.z - 2.0f
             );
 
