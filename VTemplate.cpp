@@ -573,8 +573,8 @@ protected:
                 gubo.lights[index].g = 3;
                 gubo.lights[index].cosout = 0.6f;
                 gubo.lights[index].cosin = 0.85f;
-                gubo.lights[index].lightPos = std::get<0>(light) + modelInfo.modelPos;
-                gubo.lights[index].lightDir = std::get<1>(light);
+                gubo.lights[index].lightPos = glm::vec3(glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) * glm::vec4(std::get<0>(light), 1.0f)) + modelInfo.modelPos;
+                gubo.lights[index].lightDir = glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) * glm::vec4(std::get<1>(light), 1.0f);
                 gubo.lights[index].lightColor = glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
                 index++;
             }
