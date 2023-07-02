@@ -117,24 +117,24 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSL, DSLGubo, DSLOverlay, DSLVColor;
+    DescriptorSetLayout DSLMesh, DSLGubo, DSLOverlay, DSLVertexWithColors;
 
     // Vertex formats
-    VertexDescriptor VD, VOverlay, VVColor;
+    VertexDescriptor VMesh, VOverlay, VVertexWithColor;
 
     // Pipelines [Shader couples]
-    Pipeline P, POverlay, PVColor;
+    Pipeline PMesh, POverlay, PVertexWithColors;
 
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
     // Models
-    Model<Vertex> MGrid;
-    Model<VertexOverlay> MKey;
-    Model<VertexVColor> Polikea;
+    Model<Vertex> MFloorGrid;
+    Model<VertexOverlay> MOverlay;
+    Model<VertexVColor> MPolikeaBuilding;
     // Descriptor sets
-    DescriptorSet DSGrid, DSGubo, DSKey, DSPolikea;
+    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding;
     // Textures
-    Texture T1, T2, TKey;
+    Texture T1, T2, TOverlayMoveObject;
     // C++ storage for uniform variables
     UniformBlock uboGrid, uboPolikea;
     GlobalUniformBlock gubo;
@@ -178,7 +178,7 @@ protected:
     // Here you also create your Descriptor set layouts and load the shaders for the pipelines
     void localInit() {
         // Descriptor Layouts [what will be passed to the shaders]
-        DSL.init(this, {
+        DSLMesh.init(this, {
                 // This array contains the bindings:
                 // first  element : the binding number
                 // second element : the type of element (buffer or texture)
@@ -196,13 +196,13 @@ protected:
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
         });
-        // TODO may bring the DSLVColor to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
-        DSLVColor.init(this, {
+        // TODO may bring the DSLVertexWithColors to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
+        DSLVertexWithColors.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
 
         // Vertex descriptors
-        VD.init(this, {
+        VMesh.init(this, {
                 // This array contains the bindings:
                 // first  element : the binding number
                 // second element : the stride of this binding
@@ -247,7 +247,7 @@ protected:
                                       sizeof(glm::vec2), UV}
                       });
 
-        VVColor.init(this, {
+        VVertexWithColor.init(this, {
                 {0, sizeof(VertexVColor), VK_VERTEX_INPUT_RATE_VERTEX}
         }, {
                              {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, pos),
@@ -263,16 +263,17 @@ protected:
         // Third and fourth parameters are respectively the vertex and fragment shaders
         // The last array, is a vector of pointer to the layouts of the sets that will
         // be used in this pipeline. The first element will be set 0, and so on
-        P.init(this, &VD, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSL});
-        P.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
+        PMesh.init(this, &VMesh, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLMesh});
+        PMesh.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
+
         POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
-        PVColor.init(this, &VVColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv", {&DSLGubo, &DSLVColor});
+
+        PVertexWithColors.init(this, &VVertexWithColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv", {&DSLGubo, &DSLVertexWithColors});
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
         // Create models
-        // TODO maybe move to external function
         int i = 0;
         std::string path = "models/lights";
         for (const auto &entry: fs::directory_iterator(path)) {
@@ -284,7 +285,7 @@ protected:
             // The second parameter is the pointer to the vertex definition for this model
             // The third parameter is the file name
             // The last is a constant specifying the file type: currently only OBJ or GLTF
-            MI.model.init(this, &VD, entry.path(), MGCG);
+            MI.model.init(this, &VMesh, entry.path(), MGCG);
             MI.modelPos = glm::vec3(0.0 + i * 2, 0.0, 0.0);
             MI.modelRot = 0.0f;
 
@@ -309,27 +310,28 @@ protected:
         }
 
         // Creates a mesh with direct enumeration of vertices and indices
-        MGrid.vertices = {{{-6, 0, -6}, {0.0, 1.0, 0.0}, {0.0f, 0.0f}},
-                          {{-6, 0, 6},  {0.0, 1.0, 0.0}, {0.0f, 1.0f}},
-                          {{6,  0, -6}, {0.0, 1.0, 0.0}, {1.0f, 0.0f}},
-                          {{6,  0, 6},  {0.0, 1.0, 0.0}, {1.0f, 1.0f}}};
-        MGrid.indices = {0, 1, 2, 1, 3, 2};
-        MGrid.initMesh(this, &VD);
+        MFloorGrid.vertices = {{{-6, 0, -6}, {0.0, 1.0, 0.0}, {0.0f, 0.0f}},
+                               {{-6, 0, 6},  {0.0, 1.0, 0.0}, {0.0f, 1.0f}},
+                               {{6,  0, -6}, {0.0, 1.0, 0.0}, {1.0f, 0.0f}},
+                               {{6,  0, 6},  {0.0, 1.0, 0.0}, {1.0f, 1.0f}}};
+        MFloorGrid.indices = {0, 1, 2, 1, 3, 2};
+        MFloorGrid.initMesh(this, &VMesh);
 
-        MKey.vertices = {{{-0.7f, 0.70f}, {0.0f, 0.0f}},
-                         {{-0.7f, 0.93f}, {0.0f, 1.0f}},
-                         {{0.7f,  0.70f}, {1.0f, 0.0f}},
-                         {{0.7f,  0.93f}, {1.0f, 1.0f}}};
-        MKey.indices = {0, 1, 2, 3, 2, 1};
-        MKey.initMesh(this, &VOverlay);
+        MOverlay.vertices = {{{-0.7f, 0.70f}, {0.0f, 0.0f}},
+                             {{-0.7f, 0.93f}, {0.0f, 1.0f}},
+                             {{0.7f,  0.70f}, {1.0f, 0.0f}},
+                             {{0.7f,  0.93f}, {1.0f, 1.0f}}};
+        MOverlay.indices = {0, 1, 2, 3, 2, 1};
+        MOverlay.initMesh(this, &VOverlay);
 
-        Polikea.init(this, &VVColor, "models/polikea.obj", OBJ);
+
+        MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikea.obj", OBJ);
 
         // Create the textures
         // The second parameter is the file name
         T1.init(this, "textures/Checker.png");
         T2.init(this, "textures/Textures_Forniture.png");
-        TKey.init(this, "textures/MoveBanner.png");
+        TOverlayMoveObject.init(this, "textures/MoveBanner.png");
 
         // Init local variables
     }
@@ -337,12 +339,12 @@ protected:
     // Here you create your pipelines and Descriptor Sets!
     void pipelinesAndDescriptorSetsInit() {
         // This creates a new pipeline (with the current surface), using its shaders
-        P.create();
+        PMesh.create();
         POverlay.create();
-        PVColor.create();
+        PVertexWithColors.create();
 
         // Here you define the data set
-        DSGrid.init(this, &DSL, {
+        DSFloorGrid.init(this, &DSLMesh, {
                 // the second parameter is a pointer to the Uniform Set Layout of this set
                 // the last parameter is an array, with one element per binding of the set.
                 // first  element : the binding number
@@ -355,16 +357,16 @@ protected:
         DSGubo.init(this, &DSLGubo, {
                 {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr}
         });
-        DSKey.init(this, &DSLOverlay, {
+        DSOverlayMoveOject.init(this, &DSLOverlay, {
                 {0, UNIFORM, sizeof(OverlayUniformBlock), nullptr},
-                {1, TEXTURE, 0,                           &TKey}
+                {1, TEXTURE, 0,                           &TOverlayMoveObject}
         });
-        DSPolikea.init(this, &DSLVColor, {
+        DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
 
         for (auto &mInfo: MV) {
-            mInfo.dsModel.init(this, &DSL, {
+            mInfo.dsModel.init(this, &DSLMesh, {
                     {0, UNIFORM, sizeof(UniformBlock), nullptr},
                     {1, TEXTURE, 0,                    &T2}
             });
@@ -375,15 +377,15 @@ protected:
     // All the object classes defined in Starter.hpp have a method .cleanup() for this purpose
     void pipelinesAndDescriptorSetsCleanup() {
         // Cleanup pipelines
-        P.cleanup();
+        PMesh.cleanup();
         POverlay.cleanup();
-        PVColor.cleanup();
+        PVertexWithColors.cleanup();
 
         // Cleanup datasets
-        DSGrid.cleanup();
+        DSFloorGrid.cleanup();
         DSGubo.cleanup();
-        DSKey.cleanup();
-        DSPolikea.cleanup();
+        DSOverlayMoveOject.cleanup();
+        DSPolikeaBuilding.cleanup();
 
         for (auto &mInfo: MV) mInfo.dsModel.cleanup();
     }
@@ -396,24 +398,25 @@ protected:
         // Cleanup textures
         T1.cleanup();
         T2.cleanup();
-        TKey.cleanup();
+        TOverlayMoveObject.cleanup();
 
         // Cleanup models
-        MGrid.cleanup();
-        MKey.cleanup();
-        Polikea.cleanup();
-        for (auto &mInfo: MV) mInfo.model.cleanup();
+        MFloorGrid.cleanup();
+        MOverlay.cleanup();
+        MPolikeaBuilding.cleanup();
+        for (auto &mInfo: MV)
+            mInfo.model.cleanup();
 
         // Cleanup descriptor set layouts
-        DSL.cleanup();
+        DSLMesh.cleanup();
         DSLGubo.cleanup();
         DSLOverlay.cleanup();
-        DSLVColor.cleanup();
+        DSLVertexWithColors.cleanup();
 
         // Destroys the pipelines
-        P.destroy();
+        PMesh.destroy();
         POverlay.destroy();
-        PVColor.destroy();
+        PVertexWithColors.destroy();
     }
 
     // Here it is the creation of the command buffer:
@@ -423,7 +426,7 @@ protected:
     void populateCommandBuffer(VkCommandBuffer commandBuffer, int currentImage) {
         // binds the pipeline
         // For a pipeline object, this command binds the corresponding pipeline to the command buffer passed in its parameter
-        P.bind(commandBuffer);
+        PMesh.bind(commandBuffer);
 
         // binds the data set
         // For a Dataset object, this command binds the corresponding dataset
@@ -432,38 +435,38 @@ protected:
         // As described in the Vulkan tutorial, a different dataset is required for each image in the swap chain.
         // This is done automatically in file Starter.hpp, however the command here needs also the index
         // of the current image in the swap chain, passed in its last parameter
-        DSGubo.bind(commandBuffer, P, 0, currentImage);
-        DSGrid.bind(commandBuffer, P, 1, currentImage);
+        DSGubo.bind(commandBuffer, PMesh, 0, currentImage);
 
+        //--- GRID ---
+        DSFloorGrid.bind(commandBuffer, PMesh, 1, currentImage);
         // binds the model
         // For a Model object, this command binds the corresponding index and vertex buffer
         // to the command buffer passed in its parameter
-        MGrid.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer,
-                         static_cast<uint32_t>(MGrid.indices.size()), 1, 0, 0, 0);
+        MFloorGrid.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFloorGrid.indices.size()), 1, 0, 0, 0);
         // the second parameter is the number of indexes to be drawn. For a Model object,
         // this can be retrieved with the .indices.size() method.
 
+        //--- MODELS ---
         for (auto &mInfo: MV) {
-            mInfo.dsModel.bind(commandBuffer, P, 1, currentImage);
+            mInfo.dsModel.bind(commandBuffer, PMesh, 1, currentImage);
             mInfo.model.bind(commandBuffer);
-            vkCmdDrawIndexed(commandBuffer,
-                             static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
+            vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
 
+        //--- PIPELINE OVERLAY ---
         POverlay.bind(commandBuffer);
-        MKey.bind(commandBuffer);
-        DSKey.bind(commandBuffer, POverlay, 0, currentImage);
+        MOverlay.bind(commandBuffer);
+        DSOverlayMoveOject.bind(commandBuffer, POverlay, 0, currentImage);
         vkCmdDrawIndexed(commandBuffer,
-                         static_cast<uint32_t>(MKey.indices.size()), 1, 0, 0, 0);
+                         static_cast<uint32_t>(MOverlay.indices.size()), 1, 0, 0, 0);
 
-        PVColor.bind(commandBuffer);
+        PVertexWithColors.bind(commandBuffer);
         // TODO check this DSGubo bind
-        DSGubo.bind(commandBuffer, PVColor, 0, currentImage);
-        DSPolikea.bind(commandBuffer, PVColor, 1, currentImage);
-        Polikea.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer,
-                         static_cast<uint32_t>(Polikea.indices.size()), 1, 0, 0, 0);
+        DSGubo.bind(commandBuffer, PVertexWithColors, 0, currentImage);
+        DSPolikeaBuilding.bind(commandBuffer, PVertexWithColors, 1, currentImage);
+        MPolikeaBuilding.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaBuilding.indices.size()), 1, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
@@ -596,7 +599,7 @@ protected:
         uboPolikea.mvpMat = ViewPrj * glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
         uboPolikea.mMat = glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
         uboPolikea.nMat = glm::inverse(glm::transpose(World));
-        DSPolikea.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
+        DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
 
         bool displayKey = false;
         for (std::size_t i = 1; i < MV.size(); ++i) {
@@ -608,7 +611,7 @@ protected:
         }
 
         uboKey.visible = (OnlyMoveCam && displayKey) ? 1.0f : 0.0f;
-        DSKey.map(currentImage, &uboKey, sizeof(uboKey), 0);
+        DSOverlayMoveOject.map(currentImage, &uboKey, sizeof(uboKey), 0);
 
         uboGrid.amb = 0.05f;
         uboGrid.gamma = 180.0f;
@@ -620,7 +623,7 @@ protected:
         // the second parameter is the pointer to the C++ data structure to transfer to the GPU
         // the third parameter is its size
         // the fourth parameter is the location inside the descriptor set of this uniform block
-        DSGrid.map(currentImage, &uboGrid, sizeof(uboGrid), 0);
+        DSFloorGrid.map(currentImage, &uboGrid, sizeof(uboGrid), 0);
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
         for (auto &mInfo: MV) {
