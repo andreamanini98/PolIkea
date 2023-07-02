@@ -206,6 +206,31 @@ struct VertexDescriptor {
 
 enum ModelType {OBJ, GLTF, MGCG};
 
+
+struct PointLightParameters {
+    float g;
+    float beta;
+};
+
+struct SpotLightParameters {
+    float g;
+    float beta;
+    float cosout;
+    float cosin;
+};
+enum LightType { EMPTY, POINT, SPOT };
+
+struct LightParameters {
+    glm::vec3 position;
+    glm::vec3 direction;
+    glm::vec3 lightColor;
+    LightType type;
+    union {
+        PointLightParameters point;
+        SpotLightParameters spot;
+    } parameters;
+};
+
 template <class Vert>
 class Model {
 	BaseProject *BP;
@@ -217,7 +242,7 @@ class Model {
 	VertexDescriptor *VD;
 
 	public:
-    std::vector<std::tuple<glm::vec3, glm::vec3>> lights;
+    std::vector<LightParameters> lights;
 	std::vector<Vert> vertices{};
 	std::vector<uint32_t> indices{};
 	void loadModelOBJ(std::string file);
@@ -2094,12 +2119,52 @@ void Model<Vert>::loadModelGLTF(std::string file, bool encoded) {
             std::istringstream iss(line);
             char comma;
             float x,y,z,dir_x,dir_y,dir_z;
-            if (!(iss >> x >> comma >> y >> comma >> z >> comma >> dir_x >> comma >> dir_y >> comma >> dir_z)) { break; } // error
-            lights.push_back({glm::vec3(x,y,z), glm::vec3(dir_x,dir_y,dir_z)});
+            if (!(iss >> x >> comma >> y >> comma >> z >> comma >> dir_x >> comma >> dir_y >> comma >> dir_z)) {
+                std::cout << "ERROR! INVALID light POS+DIRECTION " << file << "\n";
+                break;
+            } // error
+
+            LightParameters parameters{};
+            parameters.position = glm::vec3(x,y,z);
+            parameters.direction = glm::vec3(dir_x,dir_y,dir_z);
+
+
+            float light_x = 1.0f, light_y = 1.0f, light_z = 1.0f;
+            if (iss >> comma >> light_x >> comma >> light_y >> comma >> light_z) {
+                parameters.lightColor = glm::vec3(light_x, light_y, light_z);
+            }
+
+            int type;
+            if(iss >> comma >> type) {
+                if(type == 0) {
+                    parameters.type = LightType::POINT;
+                    float g, beta;
+                    if (!(iss >> comma >> g >> comma >> beta)) {
+                        std::cout << "ERROR! INVALID point light PARAMETERS " << file << "\n";
+                        break;
+                    } // error
+
+                    parameters.parameters.point = PointLightParameters{g, beta};
+                } else if(type == 1) {
+                    parameters.type = LightType::SPOT;
+                    float g_spot,beta_spot, cosout, cosin;
+                    if (!(iss >> comma >> g_spot >> comma >> beta_spot >> comma >> cosout >> comma >> cosin)) {
+                        std::cout << "ERROR! INVALID spot light PARAMETERS "<< file << "\n";
+                        break;
+                    } // error
+
+                    parameters.parameters.spot = SpotLightParameters { g_spot, beta_spot, cosout, cosin };
+                }
+            } else {
+                //DEFAULT
+                parameters.type = LightType::SPOT;
+                parameters.parameters.spot = SpotLightParameters { 3.5f, 3, 0.6f, 0.85f };
+            }
+
+            lights.push_back(parameters);
             // process pair (a,b)
         }
     }
-
 	
 	std::cout << "Loading : " << file << (encoded ? "[MGCG]" : "[GLTF]") << "\n";	
 	if(encoded) {
