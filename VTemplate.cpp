@@ -336,7 +336,7 @@ protected:
         MOverlay.initMesh(this, &VOverlay);
 
 
-        MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikea.obj", OBJ);
+        MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
 
         // Create the textures
         // The second parameter is the file name
