@@ -5,6 +5,7 @@
 #include "WorldView.hpp"
 
 #define N_SPOTLIGHTS 50
+#define N_POINTLIGHTS 50
 
 namespace fs = std::filesystem;
 
@@ -35,13 +36,22 @@ struct SpotLight {
     alignas(16) glm::vec4 lightColor;
 };
 
+struct PointLight {
+    alignas(4) float beta;   // decay exponent of the spotlight
+    alignas(4) float g;      // target distance of the spotlight
+    alignas(16) glm::vec3 lightPos;
+    alignas(16) glm::vec4 lightColor;
+};
+
 struct GlobalUniformBlock {
     alignas(16) glm::vec3 DlightDir;
     alignas(16) glm::vec3 DlightColor;
     alignas(16) glm::vec3 AmbLightColor;
     alignas(16) glm::vec3 eyePos;
-    SpotLight lights[N_SPOTLIGHTS];
-    alignas(4) int nLights;
+    SpotLight spotLights[N_SPOTLIGHTS];
+    PointLight pointLights[N_POINTLIGHTS];
+    alignas(4) int nSpotLights;
+    alignas(4) int nPointLights;
 };
 
 struct OverlayUniformBlock {
@@ -210,33 +220,33 @@ protected:
                 //                  using the corresponding Vulkan constant
                 {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX}
         }, {
-                        // This array contains the location:
-                        // first  element : the binding number
-                        // second element : the location number
-                        // third  element : the offset of this element in the memory record
-                        // fourth element : the data type of the element
-                        //                  using the corresponding Vulkan constant
-                        // fifth  element : the size in byte of the element
-                        // sixth  element : a constant defining the element usage
-                        //                   POSITION - a vec3 with the position
-                        //                   NORMAL   - a vec3 with the normal vector
-                        //                   UV       - a vec2 with a UV coordinate
-                        //                   COLOR    - a vec4 with a RGBA color
-                        //                   TANGENT  - a vec4 with the tangent vector
-                        //                   OTHER    - anything else
-                        //
-                        // ***************** DOUBLE CHECK ********************
-                        //  That the Vertex data structure you use in the "offsetoff" and
-                        //	in the "sizeof" in the previous array, refers to the correct one,
-                        //	if you have more than one vertex format!
-                        // ***************************************************
-                        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
-                                sizeof(glm::vec3), POSITION},
-                        {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, norm),
-                                sizeof(glm::vec3), NORMAL},
-                        {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
-                                sizeof(glm::vec2), UV},
-                });
+                           // This array contains the location:
+                           // first  element : the binding number
+                           // second element : the location number
+                           // third  element : the offset of this element in the memory record
+                           // fourth element : the data type of the element
+                           //                  using the corresponding Vulkan constant
+                           // fifth  element : the size in byte of the element
+                           // sixth  element : a constant defining the element usage
+                           //                   POSITION - a vec3 with the position
+                           //                   NORMAL   - a vec3 with the normal vector
+                           //                   UV       - a vec2 with a UV coordinate
+                           //                   COLOR    - a vec4 with a RGBA color
+                           //                   TANGENT  - a vec4 with the tangent vector
+                           //                   OTHER    - anything else
+                           //
+                           // ***************** DOUBLE CHECK ********************
+                           //  That the Vertex data structure you use in the "offsetoff" and
+                           //	in the "sizeof" in the previous array, refers to the correct one,
+                           //	if you have more than one vertex format!
+                           // ***************************************************
+                           {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
+                                   sizeof(glm::vec3), POSITION},
+                           {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, norm),
+                                   sizeof(glm::vec3), NORMAL},
+                           {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
+                                   sizeof(glm::vec2), UV},
+                   });
 
         VOverlay.init(this, {
                 {0, sizeof(VertexOverlay), VK_VERTEX_INPUT_RATE_VERTEX}
@@ -250,13 +260,13 @@ protected:
         VVertexWithColor.init(this, {
                 {0, sizeof(VertexVColor), VK_VERTEX_INPUT_RATE_VERTEX}
         }, {
-                             {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, pos),
-                                     sizeof(glm::vec3), POSITION},
-                             {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, norm),
-                                     sizeof(glm::vec3), NORMAL},
-                             {0, 2, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, color),
-                                     sizeof(glm::vec3), COLOR}
-                     });
+                                      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, pos),
+                                              sizeof(glm::vec3), POSITION},
+                                      {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, norm),
+                                              sizeof(glm::vec3), NORMAL},
+                                      {0, 2, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, color),
+                                              sizeof(glm::vec3), COLOR}
+                              });
 
         // Pipelines [Shader couples]
         // The second parameter is the pointer to the vertex definition
@@ -269,7 +279,8 @@ protected:
         POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PVertexWithColors.init(this, &VVertexWithColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv", {&DSLGubo, &DSLVertexWithColors});
+        PVertexWithColors.init(this, &VVertexWithColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv",
+                               {&DSLGubo, &DSLVertexWithColors});
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
@@ -570,24 +581,34 @@ protected:
         gubo.eyePos = CamPos;
 
         size_t indexSpot = 0;
-        for(auto& modelInfo : MV) {
-            for(auto light: modelInfo.model.lights) {
-                if(light.type == SPOT) {
-                    gubo.lights[indexSpot].beta = light.parameters.spot.beta;
-                    gubo.lights[indexSpot].g = light.parameters.spot.g;
-                    gubo.lights[indexSpot].cosout = light.parameters.spot.cosout;
-                    gubo.lights[indexSpot].cosin = light.parameters.spot.cosin;
-                    gubo.lights[indexSpot].lightPos = glm::vec3(
+        size_t indexPoint = 0;
+        for (auto &modelInfo: MV) {
+            for (auto light: modelInfo.model.lights) {
+                if (light.type == SPOT) {
+                    gubo.spotLights[indexSpot].beta = light.parameters.spot.beta;
+                    gubo.spotLights[indexSpot].g = light.parameters.spot.g;
+                    gubo.spotLights[indexSpot].cosout = light.parameters.spot.cosout;
+                    gubo.spotLights[indexSpot].cosin = light.parameters.spot.cosin;
+                    gubo.spotLights[indexSpot].lightPos = glm::vec3(
                             glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
                             glm::vec4(light.position, 1.0f)) + modelInfo.modelPos;
-                    gubo.lights[indexSpot].lightDir = glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
-                                                      glm::vec4(light.direction, 1.0f);
-                    gubo.lights[indexSpot].lightColor = glm::vec4(light.lightColor, 1.0f);
+                    gubo.spotLights[indexSpot].lightDir =
+                            glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
+                            glm::vec4(light.direction, 1.0f);
+                    gubo.spotLights[indexSpot].lightColor = glm::vec4(light.lightColor, 1.0f);
                     indexSpot++;
+                } else if (light.type == POINT) {
+                    gubo.pointLights[indexPoint].beta = light.parameters.point.beta;
+                    gubo.pointLights[indexPoint].g = light.parameters.point.g;
+                    gubo.pointLights[indexPoint].lightPos =
+                            glm::vec3(glm::vec4(light.position, 1.0f)) + modelInfo.modelPos;
+                    gubo.pointLights[indexPoint].lightColor = glm::vec4(light.lightColor, 1.0f);
+                    indexPoint++;
                 }
             }
         }
-        gubo.nLights = indexSpot;
+        gubo.nSpotLights = indexSpot;
+        gubo.nPointLights = indexPoint;
 
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);

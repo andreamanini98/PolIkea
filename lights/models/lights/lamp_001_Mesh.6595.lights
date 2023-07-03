@@ -6,11 +6,9 @@
         "dir_x": 0,
         "dir_y": 1,
         "dir_z": 0,
-        "spot": {
-            "beta": 3.5,
-            "g": 3,
-            "cosout": 0.65,
-            "cosin": 0.85
+        "point": {
+            "beta": 2.5,
+            "g": 3
         }
     }
 ]
