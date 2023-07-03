@@ -3,11 +3,95 @@
 #include <filesystem>
 #include "Starter.hpp"
 #include "WorldView.hpp"
+#include <random>
 
 #define N_SPOTLIGHTS 50
 #define N_POINTLIGHTS 50
 
 namespace fs = std::filesystem;
+
+#define N_ROOMS 3
+#define MIN_DIMENSION 2.0f
+#define MAX_DIMENSION 5.0f
+#define DOOR_HWIDTH 0.1f
+
+enum Direction {
+    NORTH,
+    EAST,
+    SOUTH,
+    WEST
+};
+
+struct Door {
+    float offset;
+    Direction direction;
+};
+
+struct Room {
+    float startX;
+    float startY;
+    float width;
+    float height;
+    std::vector<Door> doors;
+};
+
+inline std::vector<Room> generateFloorplan(float dimension) {
+    // Seed the random number generator
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    std::vector<Room> rooms;
+
+    float currentX = 0;
+    float currentY = 0;
+
+    float minWidth = MIN_DIMENSION;
+    float minHeight = MIN_DIMENSION;
+
+    std::uniform_int_distribution<int> boolDistr(0, 1);
+
+    Door prevDoor{};
+    for(int i = 0; i < N_ROOMS; i++) {
+        std::uniform_real_distribution<float> distribution_w(minWidth, dimension);
+        std::uniform_real_distribution<float> distribution_h(minHeight, dimension);
+        // Generate a random room
+        float roomWidth = distribution_w(gen);
+        float roomHeight = distribution_h(gen);
+
+        prevDoor.direction = prevDoor.direction == Direction::NORTH ? Direction::SOUTH : Direction::EAST;
+        auto& room = rooms.emplace_back(
+                Room{
+                        currentX,
+                        currentY,
+                        roomWidth,
+                        roomHeight,
+                        i != 0 ? std::vector<Door>({ prevDoor }) : std::vector<Door>()
+                }
+        );
+
+        if (static_cast<bool>(boolDistr(gen))) {
+            std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomHeight - DOOR_HWIDTH);
+
+            currentX += roomWidth;
+            minWidth = MIN_DIMENSION;
+            minHeight = distribution_door(gen);
+            prevDoor = Door{minHeight, Direction::NORTH};
+        } else {
+            std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomWidth - DOOR_HWIDTH);
+
+            currentY += roomHeight;
+            minWidth = distribution_door(gen);
+            minHeight = MIN_DIMENSION;
+            prevDoor = Door{minWidth, Direction::WEST };
+        }
+
+        if(i != N_ROOMS - 1) {
+            room.doors.push_back(prevDoor);
+        }
+    }
+
+    return std::move(rooms);
+}
 
 // The uniform buffer objects data structures
 // Remember to use the correct alignas(...) value
@@ -76,6 +160,25 @@ struct VertexVColor {
     glm::vec3 color;
 };
 
+inline void floorPlanToVerIndexes(const std::vector<Room>& rooms, std::vector<VertexVColor>& vPos, std::vector<uint32_t>& vIdx) {
+    uint32_t index = 0;
+    int test = 0;
+    for(auto& room: rooms) {
+        auto color = glm::vec3(test == 0, test == 1, test == 2);
+
+        vPos.push_back(VertexVColor{glm::vec3(room.startX, 1, room.startY), glm::vec3(0, 1, 0), color});
+        vPos.push_back(VertexVColor{glm::vec3(room.startX + room.width, 1, room.startY), glm::vec3(0, 1, 0), color});
+        vPos.push_back(VertexVColor{glm::vec3(room.startX + room.width, 1, room.startY + room.height), glm::vec3(0, 1, 0), color});
+        vPos.push_back(VertexVColor{glm::vec3(room.startX, 1, room.startY + room.height), glm::vec3(0, 1, 0), color});
+
+        vIdx.push_back(index); vIdx.push_back(index + 1); vIdx.push_back(index + 2);
+        vIdx.push_back(index + 2); vIdx.push_back(index + 3); vIdx.push_back(index);
+
+        index += 4;
+        test++;
+    }
+}
+
 // Struct used to store data related to a model
 struct ModelInfo {
     Model<Vertex> model;
@@ -141,12 +244,15 @@ protected:
     Model<Vertex> MFloorGrid;
     Model<VertexOverlay> MOverlay;
     Model<VertexVColor> MPolikeaBuilding;
+
+    Model<VertexVColor> MBuilding;
+
     // Descriptor sets
-    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding;
+    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding,DSBuilding;
     // Textures
     Texture T1, T2, TOverlayMoveObject;
     // C++ storage for uniform variables
-    UniformBlock uboGrid, uboPolikea;
+    UniformBlock uboGrid, uboPolikea,uboBuilding;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
 
@@ -281,6 +387,7 @@ protected:
 
         PVertexWithColors.init(this, &VVertexWithColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv",
                                {&DSLGubo, &DSLVertexWithColors});
+        PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
@@ -336,6 +443,10 @@ protected:
         MOverlay.initMesh(this, &VOverlay);
 
 
+        auto floorplan = generateFloorplan(MAX_DIMENSION);
+        floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices);
+        MBuilding.initMesh(this, &VVertexWithColor);
+
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
 
         // Create the textures
@@ -376,6 +487,10 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
 
+        DSBuilding.init(this, &DSLVertexWithColors, {
+                {0, UNIFORM, sizeof(UniformBlock), nullptr}
+        });
+
         for (auto &mInfo: MV) {
             mInfo.dsModel.init(this, &DSLMesh, {
                     {0, UNIFORM, sizeof(UniformBlock), nullptr},
@@ -397,6 +512,7 @@ protected:
         DSGubo.cleanup();
         DSOverlayMoveOject.cleanup();
         DSPolikeaBuilding.cleanup();
+        DSBuilding.cleanup();
 
         for (auto &mInfo: MV) mInfo.dsModel.cleanup();
     }
@@ -415,6 +531,7 @@ protected:
         MFloorGrid.cleanup();
         MOverlay.cleanup();
         MPolikeaBuilding.cleanup();
+        MBuilding.cleanup();
         for (auto &mInfo: MV)
             mInfo.model.cleanup();
 
@@ -478,6 +595,10 @@ protected:
         DSPolikeaBuilding.bind(commandBuffer, PVertexWithColors, 1, currentImage);
         MPolikeaBuilding.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaBuilding.indices.size()), 1, 0, 0, 0);
+
+        DSBuilding.bind(commandBuffer, PVertexWithColors, 1, currentImage);
+        MBuilding.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
@@ -621,6 +742,15 @@ protected:
         uboPolikea.mMat = glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
         uboPolikea.nMat = glm::inverse(glm::transpose(World));
         DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
+
+        uboBuilding.amb = 0.05f;
+        uboBuilding.gamma = 180.0f;
+        uboBuilding.sColor = glm::vec3(1.0f);
+        uboBuilding.mvpMat = ViewPrj * glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
+        uboBuilding.mMat = glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
+        uboBuilding.nMat = glm::inverse(glm::transpose(World));
+        DSBuilding.map(currentImage, &uboBuilding, sizeof(uboBuilding), 0);
+
 
         bool displayKey = false;
         for (std::size_t i = 1; i < MV.size(); ++i) {
