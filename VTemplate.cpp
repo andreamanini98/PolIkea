@@ -51,7 +51,7 @@ inline std::vector<Room> generateFloorplan(float dimension) {
     std::uniform_int_distribution<int> boolDistr(0, 1);
 
     Door prevDoor{};
-    for(int i = 0; i < N_ROOMS; i++) {
+    for (int i = 0; i < N_ROOMS; i++) {
         std::uniform_real_distribution<float> distribution_w(minWidth, dimension);
         std::uniform_real_distribution<float> distribution_h(minHeight, dimension);
         // Generate a random room
@@ -59,13 +59,13 @@ inline std::vector<Room> generateFloorplan(float dimension) {
         float roomHeight = distribution_h(gen);
 
         prevDoor.direction = prevDoor.direction == Direction::NORTH ? Direction::SOUTH : Direction::EAST;
-        auto& room = rooms.emplace_back(
+        auto &room = rooms.emplace_back(
                 Room{
                         currentX,
                         currentY,
                         roomWidth,
                         roomHeight,
-                        i != 0 ? std::vector<Door>({ prevDoor }) : std::vector<Door>()
+                        i != 0 ? std::vector<Door>({prevDoor}) : std::vector<Door>()
                 }
         );
 
@@ -82,10 +82,10 @@ inline std::vector<Room> generateFloorplan(float dimension) {
             currentY += roomHeight;
             minWidth = distribution_door(gen);
             minHeight = MIN_DIMENSION;
-            prevDoor = Door{minWidth, Direction::WEST };
+            prevDoor = Door{minWidth, Direction::WEST};
         }
 
-        if(i != N_ROOMS - 1) {
+        if (i != N_ROOMS - 1) {
             room.doors.push_back(prevDoor);
         }
     }
@@ -160,19 +160,26 @@ struct VertexVColor {
     glm::vec3 color;
 };
 
-inline void floorPlanToVerIndexes(const std::vector<Room>& rooms, std::vector<VertexVColor>& vPos, std::vector<uint32_t>& vIdx) {
+inline void
+floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx) {
     uint32_t index = 0;
     int test = 0;
-    for(auto& room: rooms) {
+    for (auto &room: rooms) {
         auto color = glm::vec3(test == 0, test == 1, test == 2);
 
         vPos.push_back(VertexVColor{glm::vec3(room.startX, 1, room.startY), glm::vec3(0, 1, 0), color});
         vPos.push_back(VertexVColor{glm::vec3(room.startX + room.width, 1, room.startY), glm::vec3(0, 1, 0), color});
-        vPos.push_back(VertexVColor{glm::vec3(room.startX + room.width, 1, room.startY + room.height), glm::vec3(0, 1, 0), color});
+        vPos.push_back(
+                VertexVColor{glm::vec3(room.startX + room.width, 1, room.startY + room.height), glm::vec3(0, 1, 0),
+                             color});
         vPos.push_back(VertexVColor{glm::vec3(room.startX, 1, room.startY + room.height), glm::vec3(0, 1, 0), color});
 
-        vIdx.push_back(index); vIdx.push_back(index + 1); vIdx.push_back(index + 2);
-        vIdx.push_back(index + 2); vIdx.push_back(index + 3); vIdx.push_back(index);
+        vIdx.push_back(index);
+        vIdx.push_back(index + 1);
+        vIdx.push_back(index + 2);
+        vIdx.push_back(index + 2);
+        vIdx.push_back(index + 3);
+        vIdx.push_back(index);
 
         index += 4;
         test++;
@@ -248,11 +255,11 @@ protected:
     Model<VertexVColor> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding,DSBuilding;
+    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
     // Textures
     Texture T1, T2, TOverlayMoveObject;
     // C++ storage for uniform variables
-    UniformBlock uboGrid, uboPolikea,uboBuilding;
+    UniformBlock uboGrid, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
 
@@ -391,41 +398,8 @@ protected:
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
-        // Create models
-        int i = 0;
-        std::string path = "models/lights";
-        for (const auto &entry: fs::directory_iterator(path)) {
-            // Added this check since in MacOS this hidden file could be created in a directory
-            if (static_cast<std::string>(entry.path()).find("DS_Store") != std::string::npos)
-                continue;
-
-            ModelInfo MI;
-            // The second parameter is the pointer to the vertex definition for this model
-            // The third parameter is the file name
-            // The last is a constant specifying the file type: currently only OBJ or GLTF
-            MI.model.init(this, &VMesh, entry.path(), MGCG);
-            MI.modelPos = glm::vec3(0.0 + i * 2, 0.0, 0.0);
-            MI.modelRot = 0.0f;
-
-            MI.minCoords = glm::vec3(std::numeric_limits<float>::max());
-            MI.maxCoords = glm::vec3(std::numeric_limits<float>::lowest());
-
-            for (const auto &vertex: MI.model.vertices) {
-                MI.minCoords = glm::min(MI.minCoords, vertex.pos);
-                MI.maxCoords = glm::max(MI.maxCoords, vertex.pos);
-            }
-            MI.center = (MI.minCoords + MI.maxCoords) / 2.0f;
-            MI.size = MI.maxCoords - MI.minCoords;
-
-            MI.cylinderRadius = glm::distance(glm::vec3(MI.maxCoords.x, 0, MI.maxCoords.z),
-                                              glm::vec3(MI.minCoords.x, 0, MI.minCoords.z)) / 2;
-            MI.cylinderHeight = MI.maxCoords.y - MI.minCoords.y;
-
-            MI.modelPos += glm::vec3(0.0, -std::min(0.0f, MI.minCoords.y), 0.0);
-
-            MV.push_back(MI);
-            i++;
-        }
+        loadModels("models/furniture", this, &VMesh, &MV);
+        loadModels("models/lights", this, &VMesh, &MV);
 
         // Creates a mesh with direct enumeration of vertices and indices
         MFloorGrid.vertices = {{{-6, 0, -6}, {0.0, 1.0, 0.0}, {0.0f, 0.0f}},
@@ -456,6 +430,43 @@ protected:
         TOverlayMoveObject.init(this, "textures/MoveBanner.png");
 
         // Init local variables
+    }
+
+    inline void
+    loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMesh, std::vector<ModelInfo> *MV) {
+        int i = 0;
+        for (const auto &entry: fs::directory_iterator(path)) {
+            // Added this check since in MacOS this hidden file could be created in a directory
+            if (static_cast<std::string>(entry.path()).find("DS_Store") != std::string::npos)
+                continue;
+
+            ModelInfo MI;
+            // The second parameter is the pointer to the vertex definition for this model
+            // The third parameter is the file name
+            // The last is a constant specifying the file type: currently only OBJ or GLTF
+            MI.model.init(thisVTemplate, VMesh, entry.path(), MGCG);
+            MI.modelPos = glm::vec3(0.0 + i * 2, 0.0, 0.0);
+            MI.modelRot = 0.0f;
+
+            MI.minCoords = glm::vec3(std::numeric_limits<float>::max());
+            MI.maxCoords = glm::vec3(std::numeric_limits<float>::lowest());
+
+            for (const auto &vertex: MI.model.vertices) {
+                MI.minCoords = glm::min(MI.minCoords, vertex.pos);
+                MI.maxCoords = glm::max(MI.maxCoords, vertex.pos);
+            }
+            MI.center = (MI.minCoords + MI.maxCoords) / 2.0f;
+            MI.size = MI.maxCoords - MI.minCoords;
+
+            MI.cylinderRadius = glm::distance(glm::vec3(MI.maxCoords.x, 0, MI.maxCoords.z),
+                                              glm::vec3(MI.minCoords.x, 0, MI.minCoords.z)) / 2;
+            MI.cylinderHeight = MI.maxCoords.y - MI.minCoords.y;
+
+            MI.modelPos += glm::vec3(0.0, -std::min(0.0f, MI.minCoords.y), 0.0);
+
+            MV->push_back(MI);
+            i++;
+        }
     }
 
     // Here you create your pipelines and Descriptor Sets!
@@ -698,7 +709,7 @@ protected:
 
         gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
         gubo.DlightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-        gubo.AmbLightColor = glm::vec3(0.2f);
+        gubo.AmbLightColor = glm::vec3(1.0f);
         gubo.eyePos = CamPos;
 
         size_t indexSpot = 0;
