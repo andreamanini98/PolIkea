@@ -7,6 +7,7 @@
 
 #define N_SPOTLIGHTS 50
 #define N_POINTLIGHTS 50
+#define MAX_OBJECTS_IN_POLIKEA 15 // Do not exceed 15 since the model is pre-generated using Blender
 
 namespace fs = std::filesystem;
 
@@ -267,6 +268,26 @@ protected:
     // A vector containing one element for each model loaded where we want to keep track of its information
     std::vector<ModelInfo> MV;
 
+    glm::vec3 polikeaBuildingPosition = glm::vec3(3.0, 0.0, -3.0);
+    // TODO MAYBE FIND AN ALGORITHMIC WAY OR STORE THIS IN A FILE
+    std::vector<glm::vec3> polikeaBuildingOffsets = {
+            glm::vec3(-7.5f, 1.0f, -17.5f),
+            glm::vec3(-3.75f, 1.0f, -17.5f),
+            glm::vec3(0.0f, 1.0f, -17.5f),
+            glm::vec3(7.5f, 1.0f, -17.5f),
+            glm::vec3(-7.5f, 1.0f, -12.5f),
+            glm::vec3(-3.75f, 1.0f, -12.5f),
+            glm::vec3(0.0f, 1.0f, -12.5f),
+            glm::vec3(7.5f, 1.0f, -12.5f),
+            glm::vec3(-7.5f, 1.0f, -7.5f),
+            glm::vec3(-3.75f, 1.0f, -7.5f),
+            glm::vec3(0.0f, 1.0f, -7.5f),
+            glm::vec3(7.5f, 1.0f, -7.5f),
+            glm::vec3(-7.5f, 1.0f, -2.5f),
+            glm::vec3(-3.75f, 1.0f, -2.5f),
+            glm::vec3(0.0f, 1.0f, -2.5f)
+    };
+
     glm::vec3 CamPos = glm::vec3(2.0, 0.7, 3.45706);;
     float CamAlpha = 0.0f;
     float CamBeta = 0.0f;
@@ -435,6 +456,9 @@ protected:
     inline void
     loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMesh, std::vector<ModelInfo> *MV) {
         int i = 0;
+        int polikeaBuildingOffsetsIndex = 0;
+        bool loadingInPolikeaBuilding = path.find("furniture") != std::string::npos;
+
         for (const auto &entry: fs::directory_iterator(path)) {
             // Added this check since in MacOS this hidden file could be created in a directory
             if (static_cast<std::string>(entry.path()).find("DS_Store") != std::string::npos)
@@ -445,8 +469,17 @@ protected:
             // The third parameter is the file name
             // The last is a constant specifying the file type: currently only OBJ or GLTF
             MI.model.init(thisVTemplate, VMesh, entry.path(), MGCG);
-            MI.modelPos = glm::vec3(0.0 + i * 2, 0.0, 0.0);
-            MI.modelRot = 0.0f;
+            if (polikeaBuildingOffsetsIndex < MAX_OBJECTS_IN_POLIKEA && loadingInPolikeaBuilding) {
+                MI.modelPos = polikeaBuildingPosition + polikeaBuildingOffsets[polikeaBuildingOffsetsIndex];
+                polikeaBuildingOffsetsIndex++;
+            } else {
+                MI.modelPos = glm::vec3(0.0f + i * 2, 0.0f, 0.0f);
+            }
+            if (MAX_OBJECTS_IN_POLIKEA - polikeaBuildingOffsetsIndex < 3 && loadingInPolikeaBuilding) {
+                MI.modelRot = glm::radians(180.0f);
+            } else {
+                MI.modelRot = 0.0f;
+            }
 
             MI.minCoords = glm::vec3(std::numeric_limits<float>::max());
             MI.maxCoords = glm::vec3(std::numeric_limits<float>::lowest());
@@ -749,7 +782,7 @@ protected:
         uboPolikea.amb = 0.05f;
         uboPolikea.gamma = 180.0f;
         uboPolikea.sColor = glm::vec3(1.0f);
-        uboPolikea.mvpMat = ViewPrj * glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
+        uboPolikea.mvpMat = ViewPrj * glm::translate(glm::mat4(1), polikeaBuildingPosition) * World;
         uboPolikea.mMat = glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
         uboPolikea.nMat = glm::inverse(glm::transpose(World));
         DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
