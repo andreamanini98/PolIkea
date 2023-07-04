@@ -268,24 +268,24 @@ protected:
     // A vector containing one element for each model loaded where we want to keep track of its information
     std::vector<ModelInfo> MV;
 
-    glm::vec3 polikeaBuildingPosition = glm::vec3(3.0, 0.0, -3.0);
+    glm::vec3 polikeaBuildingPosition = glm::vec3(5.0f, 0.0f, -15.0f);
     // TODO MAYBE FIND AN ALGORITHMIC WAY OR STORE THIS IN A FILE
     std::vector<glm::vec3> polikeaBuildingOffsets = {
-            glm::vec3(-7.5f, 1.0f, -17.5f),
-            glm::vec3(-3.75f, 1.0f, -17.5f),
-            glm::vec3(0.0f, 1.0f, -17.5f),
-            glm::vec3(7.5f, 1.0f, -17.5f),
-            glm::vec3(-7.5f, 1.0f, -12.5f),
-            glm::vec3(-3.75f, 1.0f, -12.5f),
-            glm::vec3(0.0f, 1.0f, -12.5f),
-            glm::vec3(7.5f, 1.0f, -12.5f),
-            glm::vec3(-7.5f, 1.0f, -7.5f),
-            glm::vec3(-3.75f, 1.0f, -7.5f),
-            glm::vec3(0.0f, 1.0f, -7.5f),
-            glm::vec3(7.5f, 1.0f, -7.5f),
-            glm::vec3(-7.5f, 1.0f, -2.5f),
-            glm::vec3(-3.75f, 1.0f, -2.5f),
-            glm::vec3(0.0f, 1.0f, -2.5f)
+            glm::vec3(-7.5f, 0.625f, -17.5f),
+            glm::vec3(-3.75f, 0.625f, -17.5f),
+            glm::vec3(0.0f, 0.625f, -17.5f),
+            glm::vec3(7.5f, 0.625f, -17.5f),
+            glm::vec3(-7.5f, 0.625f, -12.5f),
+            glm::vec3(-3.75f, 0.625f, -12.5f),
+            glm::vec3(0.0f, 0.625f, -12.5f),
+            glm::vec3(7.5f, 0.625f, -12.5f),
+            glm::vec3(-7.5f, 0.625f, -7.5f),
+            glm::vec3(-3.75f, 0.625f, -7.5f),
+            glm::vec3(0.0f, 0.625f, -7.5f),
+            glm::vec3(7.5f, 0.625f, -7.5f),
+            glm::vec3(-7.5f, 0.625f, -2.5f),
+            glm::vec3(-3.75f, 0.625f, -2.5f),
+            glm::vec3(0.0f, 0.625f, -2.5f)
     };
 
     glm::vec3 CamPos = glm::vec3(2.0, 0.7, 3.45706);;
@@ -783,7 +783,7 @@ protected:
         uboPolikea.gamma = 180.0f;
         uboPolikea.sColor = glm::vec3(1.0f);
         uboPolikea.mvpMat = ViewPrj * glm::translate(glm::mat4(1), polikeaBuildingPosition) * World;
-        uboPolikea.mMat = glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
+        uboPolikea.mMat = glm::translate(glm::mat4(1), polikeaBuildingPosition) * World;
         uboPolikea.nMat = glm::inverse(glm::transpose(World));
         DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
 
