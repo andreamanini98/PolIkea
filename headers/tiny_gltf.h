@@ -2424,7 +2424,7 @@ bool LoadImageData(Image *image, const int image_idx, std::string *err,
     if (req_height != h) {
       stbi_image_free(data);
       if (err) {
-        (*err) += "Image height mismatch. for image[" +
+        (*err) += "Image depth mismatch. for image[" +
                   std::to_string(image_idx) + "] name = \"" + image->name +
                   "\"\n";
       }
@@ -3790,7 +3790,7 @@ static bool ParseImage(Image *image, const int image_idx, std::string *err,
     ParseIntegerProperty(&width, err, o, "width", false);
 
     int height = 0;
-    ParseIntegerProperty(&height, err, o, "height", false);
+    ParseIntegerProperty(&height, err, o, "depth", false);
 
     // Just only save some information here. Loading actual image data from
     // bufferView is done after this `ParseImage` function.

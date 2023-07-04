@@ -11,9 +11,9 @@
 
 namespace fs = std::filesystem;
 
-#define N_ROOMS 3
-#define MIN_DIMENSION 2.0f
-#define MAX_DIMENSION 5.0f
+#define N_ROOMS 6
+#define MIN_DIMENSION 2.5f
+#define MAX_DIMENSION 4.0f
 #define DOOR_HWIDTH 0.1f
 
 enum Direction {
@@ -32,67 +32,9 @@ struct Room {
     float startX;
     float startY;
     float width;
-    float height;
+    float depth;
     std::vector<Door> doors;
 };
-
-inline std::vector<Room> generateFloorplan(float dimension) {
-    // Seed the random number generator
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    std::vector<Room> rooms;
-
-    float currentX = 0;
-    float currentY = 0;
-
-    float minWidth = MIN_DIMENSION;
-    float minHeight = MIN_DIMENSION;
-
-    std::uniform_int_distribution<int> boolDistr(0, 1);
-
-    Door prevDoor{};
-    for (int i = 0; i < N_ROOMS; i++) {
-        std::uniform_real_distribution<float> distribution_w(minWidth, dimension);
-        std::uniform_real_distribution<float> distribution_h(minHeight, dimension);
-        // Generate a random room
-        float roomWidth = distribution_w(gen);
-        float roomHeight = distribution_h(gen);
-
-        prevDoor.direction = prevDoor.direction == Direction::NORTH ? Direction::SOUTH : Direction::EAST;
-        auto &room = rooms.emplace_back(
-                Room{
-                        currentX,
-                        currentY,
-                        roomWidth,
-                        roomHeight,
-                        i != 0 ? std::vector<Door>({prevDoor}) : std::vector<Door>()
-                }
-        );
-
-        if (static_cast<bool>(boolDistr(gen))) {
-            std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomHeight - DOOR_HWIDTH);
-
-            currentX += roomWidth;
-            minWidth = MIN_DIMENSION;
-            minHeight = distribution_door(gen);
-            prevDoor = Door{minHeight, Direction::NORTH};
-        } else {
-            std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomWidth - DOOR_HWIDTH);
-
-            currentY += roomHeight;
-            minWidth = distribution_door(gen);
-            minHeight = MIN_DIMENSION;
-            prevDoor = Door{minWidth, Direction::WEST};
-        }
-
-        if (i != N_ROOMS - 1) {
-            room.doors.push_back(prevDoor);
-        }
-    }
-
-    return std::move(rooms);
-}
 
 // The uniform buffer objects data structures
 // Remember to use the correct alignas(...) value
@@ -161,28 +103,311 @@ struct VertexVColor {
     glm::vec3 color;
 };
 
-inline void
-floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx) {
+
+class VertexStorage {
+    uint32_t vertexCurIdx = 0;
+    std::vector<VertexVColor>& vPos;
+    std::vector<uint32_t>& vIdx;
+public:
+    VertexStorage(std::vector<VertexVColor>& vPos, std::vector<uint32_t>& vIdx) : vPos(vPos), vIdx(vIdx), vertexCurIdx(vPos.size()) {
+
+    }
+
+    uint32_t addVertex(VertexVColor color) {
+        vPos.push_back(color);
+        return vertexCurIdx++;
+    }
+
+    void drawRect(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color) {
+        glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
+        printf("%f %f %f %d\n", norm.x, norm.y, norm.z, vecDir);
+        auto i0 = addVertex({v0, norm, color});
+        auto i1 = addVertex({v1, norm, color});
+        auto i2 = addVertex({v2, norm, color});
+        auto i3 = addVertex({v3, norm, color});
+
+        //printf("%d %d %d %d\n", i0, i1, i2, i3);
+
+        if(vecDir > 0) {
+            addIndex(i0, i1, i2);
+            addIndex(i2, i3, i0);
+        } else {
+            addIndex(i2, i1, i0);
+            addIndex(i0, i3, i2);
+        }
+    }
+
+    void addIndex(uint32_t v0, uint32_t v1, uint32_t v2) {
+        vIdx.push_back(v0); vIdx.push_back(v1); vIdx.push_back(v2);
+    }
+};
+
+inline std::vector<Room> generateFloorplan(float dimension) {
+    // Seed the random number generator
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    std::vector<Room> rooms;
+
+    float currentX = 0;
+    float currentY = 0;
+
+    float minWidth = MIN_DIMENSION;
+    float minHeight = MIN_DIMENSION;
+
+    std::uniform_int_distribution<int> boolDistr(0, 1);
+
+    Door prevDoor{};
+    for (int i = 0; i < N_ROOMS; i++) {
+        std::uniform_real_distribution<float> distribution_w(minWidth, dimension);
+        std::uniform_real_distribution<float> distribution_h(minHeight, dimension);
+        // Generate a random room
+        float roomWidth = distribution_w(gen);
+        float roomHeight = distribution_h(gen);
+
+        prevDoor.direction = prevDoor.direction == Direction::NORTH ? Direction::SOUTH : Direction::WEST;
+        auto &room = rooms.emplace_back(
+                Room{
+                        currentX,
+                        currentY,
+                        roomWidth,
+                        roomHeight,
+                        i != 0 ? std::vector<Door>({prevDoor}) : std::vector<Door>()
+                }
+        );
+
+        if (0) {
+            std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomHeight - DOOR_HWIDTH);
+
+            currentX += roomWidth;
+            minWidth = MIN_DIMENSION;
+            minHeight = distribution_door(gen);
+            prevDoor = Door{minHeight, Direction::EAST};
+        } else {
+            std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomWidth - DOOR_HWIDTH);
+
+            currentY += roomHeight;
+            minWidth = distribution_door(gen);
+            minHeight = MIN_DIMENSION;
+            prevDoor = Door{minWidth, Direction::NORTH};
+        }
+
+        if (i != N_ROOMS - 1) {
+            room.doors.push_back(prevDoor);
+        }
+    }
+
+    return std::move(rooms);
+}
+
+#define ROOM_CEILING_HEIGHT 1.0f
+#define DOOR_HEIGHT 0.5f
+
+inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx) {
+    VertexStorage storage(vPos, vIdx);
     uint32_t index = 0;
     int test = 0;
     for (auto &room: rooms) {
-        auto color = glm::vec3(test == 0, test == 1, test == 2);
+        auto color = glm::vec3((test %3) == 0, (test%3) == 1, (test%3) == 2);
 
-        vPos.push_back(VertexVColor{glm::vec3(room.startX, 1, room.startY), glm::vec3(0, 1, 0), color});
-        vPos.push_back(VertexVColor{glm::vec3(room.startX + room.width, 1, room.startY), glm::vec3(0, 1, 0), color});
-        vPos.push_back(
-                VertexVColor{glm::vec3(room.startX + room.width, 1, room.startY + room.height), glm::vec3(0, 1, 0),
-                             color});
-        vPos.push_back(VertexVColor{glm::vec3(room.startX, 1, room.startY + room.height), glm::vec3(0, 1, 0), color});
+        storage.drawRect(
+            glm::vec3(room.startX,              0, room.startY),
+            glm::vec3(room.startX + room.width, 0, room.startY),
+            glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
+            glm::vec3(room.startX,              0, room.startY + room.depth),
+            -1,
+            color
+        );
 
-        vIdx.push_back(index);
-        vIdx.push_back(index + 1);
-        vIdx.push_back(index + 2);
-        vIdx.push_back(index + 2);
-        vIdx.push_back(index + 3);
-        vIdx.push_back(index);
+        storage.drawRect(
+            glm::vec3(room.startX            , ROOM_CEILING_HEIGHT, room.startY               ),
+            glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY              ),
+            glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+            glm::vec3(room.startX             , ROOM_CEILING_HEIGHT, room.startY + room.depth),
+            1,
+            color
+        );
 
-        index += 4;
+        bool hasDoorNorth = false;
+        float offsetNorth;
+        bool hasDoorSouth = false;
+        float offsetSouth;
+        bool hasDoorEast = false;
+        float offsetEast;
+        bool hasDoorWest = false;
+        float offsetWest;
+
+        for(auto& door : room.doors) {
+            if(door.direction == NORTH) {
+                hasDoorNorth = true;
+                offsetNorth = door.offset;
+            }
+            if(door.direction == SOUTH) {
+                hasDoorSouth = true;
+                offsetSouth = door.offset;
+            }
+            if(door.direction == EAST){
+                hasDoorEast = true;
+                offsetEast = door.offset;
+            }
+            if(door.direction == WEST) {
+                hasDoorWest = true;
+                offsetWest = door.offset;
+            }
+        }
+
+        if(hasDoorSouth) {
+            storage.drawRect(
+                    glm::vec3(room.startX                           , 0                  , room.startY),
+                    glm::vec3(room.startX + offsetSouth - DOOR_HWIDTH, 0                  , room.startY),
+                    glm::vec3(room.startX + offsetSouth - DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY),
+                    glm::vec3(room.startX                            , ROOM_CEILING_HEIGHT, room.startY),
+                    1,
+                    color
+            );
+
+            storage.drawRect(
+                    glm::vec3(room.startX + offsetSouth - DOOR_HWIDTH, DOOR_HEIGHT        , room.startY),
+                    glm::vec3(room.startX + offsetSouth + DOOR_HWIDTH, DOOR_HEIGHT         , room.startY),
+                    glm::vec3(room.startX + offsetSouth + DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY),
+                    glm::vec3(room.startX + offsetSouth - DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY),
+                    1,
+                    color
+            );
+
+            storage.drawRect(
+                    glm::vec3(room.startX + offsetSouth + DOOR_HWIDTH, 0                  , room.startY),
+                    glm::vec3(room.startX + room.width               , 0                  , room.startY),
+                    glm::vec3(room.startX + room.width               , ROOM_CEILING_HEIGHT, room.startY),
+                    glm::vec3(room.startX + offsetSouth + DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY),
+                    1,
+                    color
+            );
+        } else {
+            storage.drawRect(
+                glm::vec3(room.startX             , 0                  , room.startY),
+                glm::vec3(room.startX + room.width, 0                  , room.startY),
+                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
+                glm::vec3(room.startX             , ROOM_CEILING_HEIGHT, room.startY),
+                1,
+                color
+            );
+        }
+
+        if(hasDoorNorth) {
+            storage.drawRect(
+                    glm::vec3(room.startX                           , 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    glm::vec3(room.startX                            , ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    -1,
+                    color
+            );
+
+            storage.drawRect(
+                    glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, DOOR_HEIGHT        , room.startY + room.depth),
+                    glm::vec3(room.startX + offsetNorth + DOOR_HWIDTH, DOOR_HEIGHT         , room.startY + room.depth),
+                    glm::vec3(room.startX + offsetNorth + DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    -1,
+                    color
+            );
+
+            storage.drawRect(
+                    glm::vec3(room.startX + offsetNorth + DOOR_HWIDTH, 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX + room.width               , 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX + room.width               , ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    glm::vec3(room.startX + offsetNorth + DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    -1,
+                    color
+            );
+        } else {
+            storage.drawRect(
+                    glm::vec3(room.startX             , 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    glm::vec3(room.startX             , ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                -1,
+                color
+            );
+        }
+
+        if(hasDoorWest) {
+            storage.drawRect(
+                    glm::vec3(room.startX, 0                  , room.startY),
+                    glm::vec3(room.startX, 0                  , room.startY + offsetWest - DOOR_HWIDTH),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + offsetWest - DOOR_HWIDTH),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
+                    -1,
+                    color
+            );
+
+            storage.drawRect(
+                    glm::vec3(room.startX, DOOR_HEIGHT                  , room.startY + offsetWest - DOOR_HWIDTH),
+                    glm::vec3(room.startX, DOOR_HEIGHT                  , room.startY + offsetWest + DOOR_HWIDTH),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT          , room.startY + offsetWest + DOOR_HWIDTH),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT          , room.startY + offsetWest - DOOR_HWIDTH),
+                    -1,
+                    color
+            );
+
+            storage.drawRect(
+                    glm::vec3(room.startX, 0                  , room.startY + offsetWest + DOOR_HWIDTH),
+                    glm::vec3(room.startX, 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + offsetWest + DOOR_HWIDTH),
+                    -1,
+                    color
+            );
+        } else {
+            storage.drawRect(
+                    glm::vec3(room.startX, 0                 , room.startY),
+                    glm::vec3(room.startX, 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
+                    -1,
+                    color
+            );
+        }
+
+        if(hasDoorEast) {
+            storage.drawRect(
+                    glm::vec3(room.startX + room.width, 0                  , room.startY),
+                    glm::vec3(room.startX + room.width, 0                  , room.startY + offsetEast - DOOR_HWIDTH),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + offsetEast - DOOR_HWIDTH),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
+                    1,
+                    color
+            );
+
+            storage.drawRect(
+                    glm::vec3(room.startX + room.width, DOOR_HEIGHT                  , room.startY + offsetEast - DOOR_HWIDTH),
+                    glm::vec3(room.startX + room.width, DOOR_HEIGHT                  , room.startY + offsetEast + DOOR_HWIDTH),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT          , room.startY + offsetEast + DOOR_HWIDTH),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT          , room.startY + offsetEast - DOOR_HWIDTH),
+                    1,
+                    color
+            );
+
+            storage.drawRect(
+                    glm::vec3(room.startX + room.width, 0                  , room.startY + offsetEast + DOOR_HWIDTH),
+                    glm::vec3(room.startX + room.width, 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + offsetEast + DOOR_HWIDTH),
+                    1,
+                    color
+            );
+        } else {
+            storage.drawRect(
+                glm::vec3(room.startX + room.width, 0                  , room.startY),
+                glm::vec3(room.startX + room.width, 0                  , room.startY + room.depth),
+                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
+                1,
+                color
+            );
+        }
+
         test++;
     }
 }
@@ -415,7 +640,7 @@ protected:
 
         PVertexWithColors.init(this, &VVertexWithColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv",
                                {&DSLGubo, &DSLVertexWithColors});
-        PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
+        //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
@@ -453,8 +678,7 @@ protected:
         // Init local variables
     }
 
-    inline void
-    loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMesh, std::vector<ModelInfo> *MV) {
+    inline void loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMesh, std::vector<ModelInfo> *MV) {
         int i = 0;
         int polikeaBuildingOffsetsIndex = 0;
         bool loadingInPolikeaBuilding = path.find("furniture") != std::string::npos;
@@ -615,7 +839,7 @@ protected:
         // For a Model object, this command binds the corresponding index and vertex buffer
         // to the command buffer passed in its parameter
         MFloorGrid.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFloorGrid.indices.size()), 1, 0, 0, 0);
+        //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFloorGrid.indices.size()), 1, 0, 0, 0);
         // the second parameter is the number of indexes to be drawn. For a Model object,
         // this can be retrieved with the .indices.size() method.
 

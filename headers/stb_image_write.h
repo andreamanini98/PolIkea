@@ -1535,7 +1535,7 @@ static int stbi_write_jpg_core(stbi__write_context *s, int width, int height, in
             for(x = 0; x < width; x += 16) {
                float Y[256], U[256], V[256];
                for(row = y, pos = 0; row < y+16; ++row) {
-                  // row >= height => use last input row
+                  // row >= depth => use last input row
                   int clamped_row = (row < height) ? row : height - 1;
                   int base_p = (stbi__flip_vertically_on_write ? (height-1-clamped_row) : clamped_row)*width*comp;
                   for(col = x; col < x+16; ++col, ++pos) {
@@ -1573,7 +1573,7 @@ static int stbi_write_jpg_core(stbi__write_context *s, int width, int height, in
             for(x = 0; x < width; x += 8) {
                float Y[64], U[64], V[64];
                for(row = y, pos = 0; row < y+8; ++row) {
-                  // row >= height => use last input row
+                  // row >= depth => use last input row
                   int clamped_row = (row < height) ? row : height - 1;
                   int base_p = (stbi__flip_vertically_on_write ? (height-1-clamped_row) : clamped_row)*width*comp;
                   for(col = x; col < x+8; ++col, ++pos) {
