@@ -2426,6 +2426,8 @@ void Model<Vert, Instance>::init(BaseProject *bp, VertexDescriptor *vd, std::str
 	}
 
 	createVertexBuffer();
+    if(instanceBufferPresent)
+        createInstanceBuffer();
 	createIndexBuffer();
 }
 

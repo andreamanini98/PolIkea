@@ -13,12 +13,35 @@
 namespace fs = std::filesystem;
 
 #define N_ROOMS 6
-#define MIN_DIMENSION 2.5f
-#define MAX_DIMENSION 4.0f
-#define DOOR_HWIDTH 0.1f
+#define MIN_DIMENSION 12.5f
+#define MAX_DIMENSION 18.0f
+#define DOOR_HWIDTH 0.5f
 
-#define ROOM_CEILING_HEIGHT 1.0f
-#define DOOR_HEIGHT 0.5f
+#define ROOM_CEILING_HEIGHT 3.0f
+#define DOOR_HEIGHT 2.5f
+
+enum DoorState {
+    OPEN,
+    CLOSED
+};
+
+enum DoorOpeningDirection {
+    CLOCKWISE,
+    COUNTERCLOCKWISE
+};
+
+struct DoorModelInstance {
+    glm::vec3 pos;
+};
+
+struct OpenableDoor {
+    glm::vec3 doorPos;
+    float doorRot;
+    float doorSpeed;
+    float doorRange;
+    DoorState doorState;
+    DoorOpeningDirection doorOpeningDirection;
+};
 
 enum Direction {
     NORTH,
@@ -112,9 +135,13 @@ class VertexStorage {
     uint32_t vertexCurIdx = 0;
     std::vector<VertexVColor> &vPos;
     std::vector<uint32_t> &vIdx;
+    std::vector<OpenableDoor> &openableDoors;
 public:
-    VertexStorage(std::vector<VertexVColor> &vPos,
-                  std::vector<uint32_t> &vIdx) : vPos(vPos), vIdx(vIdx), vertexCurIdx(vPos.size()) {}
+    VertexStorage(
+            std::vector<VertexVColor> &vPos,
+            std::vector<uint32_t> &vIdx,
+            std::vector<OpenableDoor> &openableDoors
+    ) : vPos(vPos), vIdx(vIdx), vertexCurIdx(vPos.size()), openableDoors(openableDoors) {}
 
     uint32_t addVertex(VertexVColor color) {
         vPos.push_back(color);
@@ -156,6 +183,9 @@ public:
         drawRect(v0, openingV0, ceilingOpeningV03, v3, vecDir, color);
         drawRect(openingV3, openingV2, ceilingOpeningV12, ceilingOpeningV03, vecDir, color);
         drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, color);
+
+        printf("%f %f %f\n", openingV0.x, openingV0.y, openingV0.z);
+        openableDoors.push_back(OpenableDoor{ openingV0, 0.0f, glm::radians(90.0f), glm::radians(90.0f), CLOSED, COUNTERCLOCKWISE });
     }
 
     void addIndex(uint32_t v0, uint32_t v1, uint32_t v2) {
@@ -223,9 +253,8 @@ inline std::vector<Room> generateFloorplan(float dimension) {
     return std::move(rooms);
 }
 
-inline void
-floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx) {
-    VertexStorage storage(vPos, vIdx);
+inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx, std::vector<OpenableDoor> &openableDoors) {
+    VertexStorage storage(vPos, vIdx, openableDoors);
     uint32_t index = 0;
     int test = 0;
     for (auto &room: rooms) {
@@ -408,32 +437,6 @@ struct ModelInfo {
     }
 };
 
-struct ModelInstance {
-    glm::vec3 pos;
-};
-
-enum DoorState {
-    OPEN,
-    CLOSED
-};
-
-enum DoorOpeningDirection {
-    CLOCKWISE,
-    COUNTERCLOCKWISE
-};
-
-struct OpenableDoor {
-    glm::vec3 doorPos;
-    float doorRot;
-    float doorSpeed;
-    float doorRange;
-    DoorState doorState;
-    DoorOpeningDirection doorOpeningDirection;
-    Model<Vertex> MDoor;
-    DescriptorSet DSDoor;
-    UniformBlock uboDoor;
-};
-
 
 // MAIN !
 class VTemplate : public BaseProject {
@@ -443,13 +446,13 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLSphere;
+    DescriptorSetLayout DSLMesh, DSLGubo, DSLOverlay, DSLVertexWithColors;
 
     // Vertex formats
-    VertexDescriptor VMesh, VOverlay, VVertexWithColor, VVertexWithColorInstance;
+    VertexDescriptor VMesh, VOverlay, VVertexWithColor, VMeshInstanced;
 
     // Pipelines [Shader couples]
-    Pipeline PMesh, POverlay, PVertexWithColors, PInstanceRendering;
+    Pipeline PMesh, POverlay, PVertexWithColors, PMeshInstanced;
 
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
@@ -457,13 +460,10 @@ protected:
     Model<Vertex> MFloorGrid;
     Model<VertexOverlay> MOverlay;
     Model<VertexVColor> MPolikeaBuilding;
-
-    Model<VertexVColor, ModelInstance> MSphere;
-
     Model<VertexVColor> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSSphere;
+    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
     // Textures
     Texture T1, T2, TOverlayMoveObject;
     // C++ storage for uniform variables
@@ -475,8 +475,6 @@ protected:
     // A vector containing one element for each model loaded where we want to keep track of its information
     std::vector<ModelInfo> MV;
 
-    OpenableDoor Door;
-
     glm::vec3 polikeaBuildingPosition = glm::vec3(5.0f, 0.0f, -15.0f);
     std::vector<glm::vec3> polikeaBuildingOffsets = getPolikeaBuildingOffsets();
     std::vector<BoundingRectangle> boundingRectangles = getBoundingRectangles(polikeaBuildingPosition);
@@ -487,6 +485,12 @@ protected:
     float CamRho = 0.0f;
     bool OnlyMoveCam = true;
     uint32_t MoveObjIndex = 0;
+
+    Model<Vertex, DoorModelInstance> MDoor;
+    DescriptorSet DSDoor;
+    UniformBlock uboDoor;
+
+    std::vector<OpenableDoor> doors;
 
     // Here you set the main application parameters
     void setWindowParameters() {
@@ -535,10 +539,6 @@ protected:
         });
         // TODO may bring the DSLVertexWithColors to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
         DSLVertexWithColors.init(this, {
-                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
-        });
-
-        DSLSphere.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
 
@@ -599,19 +599,19 @@ protected:
                                               sizeof(glm::vec3), COLOR}
                               });
 
-        VVertexWithColorInstance.init(this, {
-                {0, sizeof(VertexVColor),  VK_VERTEX_INPUT_RATE_VERTEX},
-                {1, sizeof(ModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
+        VMeshInstanced.init(this, {
+                {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX},
+                {1, sizeof(DoorModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
         }, {
-                                              {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, pos),
-                                                      sizeof(glm::vec3), POSITION},
-                                              {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, norm),
-                                                      sizeof(glm::vec3), NORMAL},
-                                              {0, 2, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, color),
-                                                      sizeof(glm::vec3), COLOR},
-                                              {1, 3, VK_FORMAT_R32G32B32_SFLOAT, offsetof(ModelInstance, pos),
-                                                      sizeof(glm::vec3), OTHER},
-                                      });
+                {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
+                        sizeof(glm::vec3), POSITION},
+                {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, norm),
+                        sizeof(glm::vec3), NORMAL},
+                {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
+                        sizeof(glm::vec2), UV},
+              {1, 3, VK_FORMAT_R32G32B32_SFLOAT, offsetof(DoorModelInstance, pos),
+                      sizeof(glm::vec3), OTHER}
+        });
 
         // Pipelines [Shader couples]
         // The second parameter is the pointer to the vertex definition
@@ -628,9 +628,8 @@ protected:
                                {&DSLGubo, &DSLVertexWithColors});
         //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PInstanceRendering.init(this, &VVertexWithColorInstance, "shaders/VColorVertInstance.spv",
-                                "shaders/VColorFragInstance.spv", {&DSLGubo, &DSLSphere});
-        PInstanceRendering.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
+        PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderVertInstanced.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLMesh});
+        PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
 
         // Models, textures and Descriptors (values assigned to the uniforms)
@@ -655,31 +654,17 @@ protected:
 
 
         auto floorplan = generateFloorplan(MAX_DIMENSION);
-        floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices);
+        floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors);
         MBuilding.initMesh(this, &VVertexWithColor);
 
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
 
-        Door.doorPos = glm::vec3(1.0f, 0.0f, 1.0f);
-        Door.doorRot = 0.0f;
-        Door.doorSpeed = glm::radians(90.0f);
-        Door.doorRange = glm::radians(90.0f);
-        Door.doorState = CLOSED;
-        Door.doorOpeningDirection = COUNTERCLOCKWISE;
-        Door.MDoor.init(this, &VMesh, "models/door_009_Mesh.112.mgcg", MGCG);
-
-        MSphere.vertices = {{{-0.7f, 0.70f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
-                            {{-0.7f, 0.93f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
-                            {{0.7f,  0.70f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
-                            {{0.7f,  0.93f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}}};
-        MSphere.instanceBufferPresent = true;
-        MSphere.instances = {
-                ModelInstance{glm::vec3(0.0f, -0.1f, 0.0f)},
-                ModelInstance{glm::vec3(0.0f, -0.4f, 0.0f)},
-                ModelInstance{glm::vec3(0.0f, -0.9f, 0.0f)}
-        };
-        MSphere.indices = {0, 1, 2, 3, 2, 1};
-        MSphere.initMesh(this, &VVertexWithColorInstance);
+        MDoor.instanceBufferPresent = true;
+        MDoor.instances.reserve(doors.size());
+        for(auto &door : doors) {
+            MDoor.instances.push_back({door.doorPos});
+        }
+        MDoor.init(this, &VMeshInstanced, "models/door_009_Mesh.112.mgcg", MGCG);
 
         // Create the textures
         // The second parameter is the file name
@@ -745,7 +730,7 @@ protected:
         PMesh.create();
         POverlay.create();
         PVertexWithColors.create();
-        PInstanceRendering.create();
+        PMeshInstanced.create();
 
         // Here you define the data set
         DSFloorGrid.init(this, &DSLMesh, {
@@ -768,16 +753,12 @@ protected:
         DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
-        Door.DSDoor.init(this, &DSLMesh, {
+        DSDoor.init(this, &DSLMesh, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
                 {1, TEXTURE, 0,                    &T2}
         });
 
         DSBuilding.init(this, &DSLVertexWithColors, {
-                {0, UNIFORM, sizeof(UniformBlock), nullptr}
-        });
-
-        DSSphere.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
 
@@ -796,16 +777,15 @@ protected:
         PMesh.cleanup();
         POverlay.cleanup();
         PVertexWithColors.cleanup();
-        PInstanceRendering.cleanup();
+        PMeshInstanced.cleanup();
 
         // Cleanup datasets
         DSFloorGrid.cleanup();
         DSGubo.cleanup();
         DSOverlayMoveOject.cleanup();
         DSPolikeaBuilding.cleanup();
-        Door.DSDoor.cleanup();
+        DSDoor.cleanup();
         DSBuilding.cleanup();
-        DSSphere.cleanup();
 
         for (auto &mInfo: MV)
             mInfo.dsModel.cleanup();
@@ -825,9 +805,8 @@ protected:
         MFloorGrid.cleanup();
         MOverlay.cleanup();
         MPolikeaBuilding.cleanup();
-        Door.MDoor.cleanup();
+        MDoor.cleanup();
         MBuilding.cleanup();
-        MSphere.cleanup();
         for (auto &mInfo: MV)
             mInfo.model.cleanup();
 
@@ -836,13 +815,12 @@ protected:
         DSLGubo.cleanup();
         DSLOverlay.cleanup();
         DSLVertexWithColors.cleanup();
-        DSLSphere.cleanup();
 
         // Destroys the pipelines
         PMesh.destroy();
         POverlay.destroy();
         PVertexWithColors.destroy();
-        PInstanceRendering.destroy();
+        PMeshInstanced.destroy();
     }
 
     // Here it is the creation of the command buffer:
@@ -880,10 +858,6 @@ protected:
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
 
-        Door.DSDoor.bind(commandBuffer, PMesh, 1, currentImage);
-        Door.MDoor.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(Door.MDoor.indices.size()), 1, 0, 0, 0);
-
         //--- PIPELINE OVERLAY ---
         POverlay.bind(commandBuffer);
         MOverlay.bind(commandBuffer);
@@ -900,11 +874,11 @@ protected:
         MBuilding.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
 
-        PInstanceRendering.bind(commandBuffer);
-        DSGubo.bind(commandBuffer, PInstanceRendering, 0, currentImage);
-        DSSphere.bind(commandBuffer, PInstanceRendering, 1, currentImage);
-        MSphere.bind(commandBuffer);
-        //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MSphere.indices.size()), 3, 0, 0, 0);
+        PMeshInstanced.bind(commandBuffer);
+        DSGubo.bind(commandBuffer, PMeshInstanced, 0, currentImage);
+        DSDoor.bind(commandBuffer, PMeshInstanced, 1, currentImage);
+        MDoor.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), doors.size(), 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
@@ -987,27 +961,29 @@ protected:
             MV[MoveObjIndex].modelRot = CamAlpha;
         }
 
-        if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
-            if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
-                Door.doorRot += Door.doorSpeed * deltaT;
-                if (Door.doorRot >= Door.doorRange)
-                    Door.doorState = OPEN;
-            }
-            if (Door.doorOpeningDirection == CLOCKWISE) {
-                Door.doorRot -= Door.doorSpeed * deltaT;
-                if (Door.doorRot <= Door.doorRange - glm::radians(180.0f))
-                    Door.doorState = OPEN;
-            }
-        } else if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
-            if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
-                Door.doorRot -= Door.doorSpeed * deltaT;
-                if (Door.doorRot <= 0.0f)
-                    Door.doorState = CLOSED;
-            }
-            if (Door.doorOpeningDirection == CLOCKWISE) {
-                Door.doorRot += Door.doorSpeed * deltaT;
-                if (Door.doorRot >= 0.0f)
-                    Door.doorState = CLOSED;
+        for(auto& Door: doors) {
+            if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
+                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
+                    Door.doorRot += Door.doorSpeed * deltaT;
+                    if (Door.doorRot >= Door.doorRange)
+                        Door.doorState = OPEN;
+                }
+                if (Door.doorOpeningDirection == CLOCKWISE) {
+                    Door.doorRot -= Door.doorSpeed * deltaT;
+                    if (Door.doorRot <= Door.doorRange - glm::radians(180.0f))
+                        Door.doorState = OPEN;
+                }
+            } else if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
+                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
+                    Door.doorRot -= Door.doorSpeed * deltaT;
+                    if (Door.doorRot <= 0.0f)
+                        Door.doorState = CLOSED;
+                }
+                if (Door.doorOpeningDirection == CLOCKWISE) {
+                    Door.doorRot += Door.doorSpeed * deltaT;
+                    if (Door.doorRot >= 0.0f)
+                        Door.doorState = CLOSED;
+                }
             }
         }
 
@@ -1086,11 +1062,12 @@ protected:
         uboPolikea.nMat = glm::inverse(glm::transpose(World));
         DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
 
+        World = baseTr;
         uboBuilding.amb = 0.05f;
         uboBuilding.gamma = 180.0f;
         uboBuilding.sColor = glm::vec3(1.0f);
-        uboBuilding.mvpMat = ViewPrj * glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, 15.0)) * World;
-        uboBuilding.mMat = glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, 15.0)) * World;
+        uboBuilding.mvpMat = ViewPrj * World;
+        uboBuilding.mMat = World;
         uboBuilding.nMat = glm::inverse(glm::transpose(World));
         DSBuilding.map(currentImage, &uboBuilding, sizeof(uboBuilding), 0);
 
@@ -1119,14 +1096,14 @@ protected:
         DSFloorGrid.map(currentImage, &uboGrid, sizeof(uboGrid), 0);
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
-        World = MakeWorldMatrix(Door.doorPos, Door.doorRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
-        Door.uboDoor.amb = 0.05f;
-        Door.uboDoor.gamma = 180.0f;
-        Door.uboDoor.sColor = glm::vec3(1.0f);
-        Door.uboDoor.mvpMat = ViewPrj * World;
-        Door.uboDoor.mMat = World;
-        Door.uboDoor.nMat = glm::inverse(glm::transpose(World));
-        Door.DSDoor.map(currentImage, &Door.uboDoor, sizeof(Door.uboDoor), 0);
+        World = baseTr;
+        uboDoor.amb = 0.05f;
+        uboDoor.gamma = 180.0f;
+        uboDoor.sColor = glm::vec3(1.0f);
+        uboDoor.mvpMat = ViewPrj * World;
+        uboDoor.mMat = World;
+        uboDoor.nMat = glm::inverse(glm::transpose(World));
+        DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
 
         for (auto &mInfo: MV) {
             World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
