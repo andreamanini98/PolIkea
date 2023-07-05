@@ -666,7 +666,7 @@ protected:
                                {&DSLGubo, &DSLVertexWithColors});
         //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PInstanceRendering.init(this, &VVertexWithColorInstance, "shaders/VColorVertInstance.spv", "shaders/VColorFrag.spv",
+        PInstanceRendering.init(this, &VVertexWithColorInstance, "shaders/VColorVertInstance.spv", "shaders/VColorFragInstance.spv",
                                 {&DSLGubo, &DSLSphere});
         PInstanceRendering.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
@@ -699,17 +699,17 @@ protected:
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
         MDoor.init(this, &VMesh, "models/door_009_Mesh.112.mgcg", MGCG);
 
-        MSphere.vertices = {{{-6, 0, -6}, {0.0, 1.0, 0.0}, {0.0f, 0.0f, 1.0f}},
-                               {{-6, 0, 6},  {0.0, 1.0, 0.0}, {0.0f, 1.0f, 0.0f}},
-                               {{6,  0, -6}, {0.0, 1.0, 0.0}, {1.0f, 0.0f, 0.0f}},
-                               {{6,  0, 6},  {0.0, 1.0, 0.0}, {0.0f, 1.0f, 0.0f}}};
+        MSphere.vertices = {{{-0.7f, 0.70f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
+                               {{-0.7f, 0.93f, 0.5f},  {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
+                               {{0.7f, 0.70f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
+                               {{0.7f, 0.93f, 0.5f},  {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}}};
         MSphere.instanceBufferPresent = true;
         MSphere.instances = {
-                ModelInstance{ glm::vec3(0.0f, 0.0f, 0.0f) },
-                ModelInstance{ glm::vec3(0.0f, 2.0f, 0.0f) },
-                ModelInstance{ glm::vec3(0.0f, 4.0f, 0.0f) }
+                ModelInstance{ glm::vec3(0.0f, -0.1f, 0.0f) },
+                ModelInstance{ glm::vec3(0.0f, -0.4f, 0.0f) },
+                ModelInstance{ glm::vec3(0.0f, -0.9f, 0.0f) }
         };
-        MSphere.indices = {0, 1, 2, 1, 3, 2};
+        MSphere.indices = {0, 1, 2, 3, 2, 1};
         MSphere.initMesh(this, &VVertexWithColorInstance);
 
         // Create the textures

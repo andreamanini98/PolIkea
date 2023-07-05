@@ -20,7 +20,8 @@ layout(location = 1) out vec3 fragNorm;
 layout(location = 2) out vec3 fragColor;
 
 void main() {
-	gl_Position = ubo.mvpMat * vec4(inPosition, 1.0);
+	gl_Position = vec4(inPosition + instancePos, 1.0);
+
 	fragPos = (ubo.mMat * vec4(inPosition, 1.0)).xyz;
 	fragNorm = (ubo.nMat * vec4(inNorm, 0.0)).xyz;
 	fragColor = inColor;
