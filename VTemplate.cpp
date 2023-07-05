@@ -131,7 +131,6 @@ public:
 
     void drawRect(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color) {
         glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
-        printf("%f %f %f %d\n", norm.x, norm.y, norm.z, vecDir);
         auto i0 = addVertex({v0, norm, color});
         auto i1 = addVertex({v1, norm, color});
         auto i2 = addVertex({v2, norm, color});
@@ -146,6 +145,24 @@ public:
             addIndex(i2, i1, i0);
             addIndex(i0, i3, i2);
         }
+    }
+
+    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color, float openingOffset) {
+        glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
+
+        glm::vec3 openingDir = glm::normalize(v1 - v0); //TODO
+        glm::vec3 openingUpDir = glm::vec3(0.0f, 1.0f, 0.0f);
+        glm::vec3 openingV0 = openingDir * (openingOffset-DOOR_HWIDTH) + v0;
+        glm::vec3 openingV1 = openingDir * (openingOffset+DOOR_HWIDTH) + v0;
+        glm::vec3 openingV2 = openingV1 + openingUpDir * DOOR_HEIGHT;
+        glm::vec3 openingV3 = openingV0 + openingUpDir * DOOR_HEIGHT;
+
+        glm::vec3 ceilingOpeningV03 = openingV0 + openingUpDir * ROOM_CEILING_HEIGHT;
+        glm::vec3 ceilingOpeningV12 = openingV1 + openingUpDir * ROOM_CEILING_HEIGHT;
+
+        drawRect(v0, openingV0, ceilingOpeningV03, v3, vecDir, color, openingOffset);
+        drawRect(openingV3, openingV2, ceilingOpeningV12, ceilingOpeningV03, vecDir, color, openingOffset);
+        drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, color, openingOffset);
     }
 
     void addIndex(uint32_t v0, uint32_t v1, uint32_t v2) {
@@ -271,31 +288,14 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
         }
 
         if (hasDoorSouth) {
-            storage.drawRect(
-                    glm::vec3(room.startX                           , 0                  , room.startY),
-                    glm::vec3(room.startX + offsetSouth - DOOR_HWIDTH, 0                  , room.startY),
-                    glm::vec3(room.startX + offsetSouth - DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY),
-                    glm::vec3(room.startX                            , ROOM_CEILING_HEIGHT, room.startY),
-                    1,
-                    color
-            );
-
-            storage.drawRect(
-                    glm::vec3(room.startX + offsetSouth - DOOR_HWIDTH, DOOR_HEIGHT        , room.startY),
-                    glm::vec3(room.startX + offsetSouth + DOOR_HWIDTH, DOOR_HEIGHT         , room.startY),
-                    glm::vec3(room.startX + offsetSouth + DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY),
-                    glm::vec3(room.startX + offsetSouth - DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY),
-                    1,
-                    color
-            );
-
-            storage.drawRect(
-                    glm::vec3(room.startX + offsetSouth + DOOR_HWIDTH, 0                  , room.startY),
-                    glm::vec3(room.startX + room.width               , 0                  , room.startY),
-                    glm::vec3(room.startX + room.width               , ROOM_CEILING_HEIGHT, room.startY),
-                    glm::vec3(room.startX + offsetSouth + DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY),
-                    1,
-                    color
+            storage.drawRectWithOpening(
+                glm::vec3(room.startX             , 0                  , room.startY),
+                glm::vec3(room.startX + room.width, 0                  , room.startY),
+                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
+                glm::vec3(room.startX             , ROOM_CEILING_HEIGHT, room.startY),
+                1,
+                color,
+                offsetSouth
             );
         } else {
             storage.drawRect(
@@ -309,31 +309,14 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
         }
 
         if (hasDoorNorth) {
-            storage.drawRect(
-                    glm::vec3(room.startX                           , 0                  , room.startY + room.depth),
-                    glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, 0                  , room.startY + room.depth),
-                    glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    glm::vec3(room.startX                            , ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    -1,
-                    color
-            );
-
-            storage.drawRect(
-                    glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, DOOR_HEIGHT        , room.startY + room.depth),
-                    glm::vec3(room.startX + offsetNorth + DOOR_HWIDTH, DOOR_HEIGHT         , room.startY + room.depth),
-                    glm::vec3(room.startX + offsetNorth + DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    -1,
-                    color
-            );
-
-            storage.drawRect(
-                    glm::vec3(room.startX + offsetNorth + DOOR_HWIDTH, 0                  , room.startY + room.depth),
-                    glm::vec3(room.startX + room.width               , 0                  , room.startY + room.depth),
-                    glm::vec3(room.startX + room.width               , ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    glm::vec3(room.startX + offsetNorth + DOOR_HWIDTH, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    -1,
-                    color
+            storage.drawRectWithOpening(
+                glm::vec3(room.startX             , 0                  , room.startY + room.depth),
+                glm::vec3(room.startX + room.width, 0                  , room.startY + room.depth),
+                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                glm::vec3(room.startX             , ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                -1,
+                color,
+                offsetNorth
             );
         } else {
             storage.drawRect(
@@ -347,31 +330,14 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
         }
 
         if (hasDoorWest) {
-            storage.drawRect(
-                    glm::vec3(room.startX, 0                  , room.startY),
-                    glm::vec3(room.startX, 0                  , room.startY + offsetWest - DOOR_HWIDTH),
-                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + offsetWest - DOOR_HWIDTH),
-                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    -1,
-                    color
-            );
-
-            storage.drawRect(
-                    glm::vec3(room.startX, DOOR_HEIGHT                  , room.startY + offsetWest - DOOR_HWIDTH),
-                    glm::vec3(room.startX, DOOR_HEIGHT                  , room.startY + offsetWest + DOOR_HWIDTH),
-                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT          , room.startY + offsetWest + DOOR_HWIDTH),
-                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT          , room.startY + offsetWest - DOOR_HWIDTH),
-                    -1,
-                    color
-            );
-
-            storage.drawRect(
-                    glm::vec3(room.startX, 0                  , room.startY + offsetWest + DOOR_HWIDTH),
+            storage.drawRectWithOpening(
+                    glm::vec3(room.startX, 0                 , room.startY),
                     glm::vec3(room.startX, 0                  , room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + offsetWest + DOOR_HWIDTH),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
                     -1,
-                    color
+                    color,
+                    offsetWest
             );
         } else {
             storage.drawRect(
@@ -385,31 +351,14 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
         }
 
         if (hasDoorEast) {
-            storage.drawRect(
-                    glm::vec3(room.startX + room.width, 0                  , room.startY),
-                    glm::vec3(room.startX + room.width, 0                  , room.startY + offsetEast - DOOR_HWIDTH),
-                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + offsetEast - DOOR_HWIDTH),
-                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                    1,
-                    color
-            );
-
-            storage.drawRect(
-                    glm::vec3(room.startX + room.width, DOOR_HEIGHT                  , room.startY + offsetEast - DOOR_HWIDTH),
-                    glm::vec3(room.startX + room.width, DOOR_HEIGHT                  , room.startY + offsetEast + DOOR_HWIDTH),
-                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT          , room.startY + offsetEast + DOOR_HWIDTH),
-                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT          , room.startY + offsetEast - DOOR_HWIDTH),
-                    1,
-                    color
-            );
-
-            storage.drawRect(
-                    glm::vec3(room.startX + room.width, 0                  , room.startY + offsetEast + DOOR_HWIDTH),
-                    glm::vec3(room.startX + room.width, 0                  , room.startY + room.depth),
-                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + offsetEast + DOOR_HWIDTH),
-                    1,
-                    color
+            storage.drawRectWithOpening(
+                glm::vec3(room.startX + room.width, 0                  , room.startY),
+                glm::vec3(room.startX + room.width, 0                  , room.startY + room.depth),
+                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
+                1,
+                color,
+                offsetEast
             );
         } else {
             storage.drawRect(
