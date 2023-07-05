@@ -46,14 +46,6 @@ struct Room {
     std::vector<Door> doors;
 };
 
-struct OpenableDoor {
-    glm::vec3 doorPos;
-    float doorRot;
-    const float doorSpeed;
-    const float doorRange;
-    DoorState doorState = CLOSED;
-};
-
 // The uniform buffer objects data structures
 // Remember to use the correct alignas(...) value
 //     float : alignas(4)
@@ -541,11 +533,13 @@ protected:
             glm::vec3(0.0f, 0.625f, -2.5f)
     };
 
+    // Doors parameters
     glm::vec3 doorPos = glm::vec3(1.0f, 0.0f, 1.0f);
     float doorRot = 0.0f;
     const float doorSpeed = glm::radians(90.0f);
-    const float doorRange = glm::radians(45.0f);
+    const float doorRange = glm::radians(90.0f);
     DoorState doorState = CLOSED;
+    DoorOpeningDirection doorOpeningDirection = COUNTERCLOCKWISE;
 
     glm::vec3 CamPos = glm::vec3(2.0, 0.7, 3.45706);;
     float CamAlpha = 0.0f;
@@ -980,8 +974,8 @@ protected:
 
         static bool debounce = false;
         static int curDebounce = 0;
-        //static bool doorDebounce = false;
-        //static int curDoorDebounce = 0;
+        static bool doorDebounce = false;
+        static int curDoorDebounce = 0;
 
         float deltaT;
         auto m = glm::vec3(0.0f), r = glm::vec3(0.0f);
@@ -1037,14 +1031,27 @@ protected:
         }
 
         if (openDoor && doorState == CLOSED) {
-            doorRot += doorSpeed * deltaT;
-            if (doorRot >= doorRange) {
-                doorState = OPEN;
+            if (doorOpeningDirection == COUNTERCLOCKWISE) {
+                doorRot += doorSpeed * deltaT;
+                if (doorRot >= doorRange)
+                    doorState = OPEN;
+            }
+            if (doorOpeningDirection == CLOCKWISE) {
+                doorRot -= doorSpeed * deltaT;
+                if (doorRot <= doorRange - glm::radians(180.0f))
+                    doorState = OPEN;
             }
         } else if (!openDoor && doorState == OPEN) {
-            doorRot -= doorSpeed * deltaT;
-            if (doorRot <= 0.0f)
-                doorState = CLOSED;
+            if (doorOpeningDirection == COUNTERCLOCKWISE) {
+                doorRot -= doorSpeed * deltaT;
+                if (doorRot <= 0.0f)
+                    doorState = CLOSED;
+            }
+            if (doorOpeningDirection == CLOCKWISE) {
+                doorRot += doorSpeed * deltaT;
+                if (doorRot >= 0.0f)
+                    doorState = CLOSED;
+            }
         }
 
         float threshold = 2.0f;
