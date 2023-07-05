@@ -16,6 +16,9 @@ namespace fs = std::filesystem;
 #define MAX_DIMENSION 4.0f
 #define DOOR_HWIDTH 0.1f
 
+#define ROOM_CEILING_HEIGHT 1.0f
+#define DOOR_HEIGHT 0.5f
+
 enum Direction {
     NORTH,
     EAST,
@@ -160,9 +163,9 @@ public:
         glm::vec3 ceilingOpeningV03 = openingV0 + openingUpDir * ROOM_CEILING_HEIGHT;
         glm::vec3 ceilingOpeningV12 = openingV1 + openingUpDir * ROOM_CEILING_HEIGHT;
 
-        drawRect(v0, openingV0, ceilingOpeningV03, v3, vecDir, color, openingOffset);
-        drawRect(openingV3, openingV2, ceilingOpeningV12, ceilingOpeningV03, vecDir, color, openingOffset);
-        drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, color, openingOffset);
+        drawRect(v0, openingV0, ceilingOpeningV03, v3, vecDir, color);
+        drawRect(openingV3, openingV2, ceilingOpeningV12, ceilingOpeningV03, vecDir, color);
+        drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, color);
     }
 
     void addIndex(uint32_t v0, uint32_t v1, uint32_t v2) {
@@ -229,9 +232,6 @@ inline std::vector<Room> generateFloorplan(float dimension) {
 
     return std::move(rooms);
 }
-
-#define ROOM_CEILING_HEIGHT 1.0f
-#define DOOR_HEIGHT 0.5f
 
 inline void
 floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx) {
