@@ -1,6 +1,8 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+#define N_ROOMS 6
+
 layout(set = 1, binding = 0) uniform UniformBufferObject {
 	float amb;
 	float gamma;
@@ -8,6 +10,7 @@ layout(set = 1, binding = 0) uniform UniformBufferObject {
 	mat4 mvpMat;
 	mat4 mMat;
 	mat4 nMat;
+	float rot[N_ROOMS-1];
 } ubo;
 
 layout(location = 0) in vec3 inPosition;
