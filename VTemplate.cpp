@@ -5,6 +5,7 @@
 #include "WorldView.hpp"
 #include "Parameters.hpp"
 #include <random>
+#include <unordered_set>
 
 #define N_SPOTLIGHTS 50
 #define N_POINTLIGHTS 50
@@ -12,7 +13,24 @@
 
 namespace fs = std::filesystem;
 
+namespace std {
+    template <>
+    struct hash<glm::vec3> {
+        size_t operator()(const glm::vec3& t) const {
+            // Calculate the hash using the member variables
+            size_t seed = 0;
+            hash<float> hasher;
+            seed ^= hasher(t.x) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= hasher(t.y) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= hasher(t.z) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            return seed;
+        }
+    };
+}
+
+//REMEMBER TO UPDATE THIS FIELD ALSO IN THE ShaderInstanced.vert
 #define N_ROOMS 6
+
 #define MIN_DIMENSION 12.5f
 #define MAX_DIMENSION 18.0f
 #define DOOR_HWIDTH 0.5f
@@ -78,6 +96,16 @@ struct UniformBlock {
     alignas(16) glm::mat4 mvpMat;
     alignas(16) glm::mat4 mMat;
     alignas(16) glm::mat4 nMat;
+};
+
+struct UniformBlockDoors {
+    alignas(4) float amb;
+    alignas(4) float gamma;
+    alignas(16) glm::vec3 sColor;
+    alignas(16) glm::mat4 mvpMat;
+    alignas(16) glm::mat4 mMat;
+    alignas(16) glm::mat4 nMat;
+    alignas(4) float rot[N_ROOMS - 1];
 };
 
 struct SpotLight {
@@ -166,8 +194,8 @@ public:
         }
     }
 
-    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color,
-                             float openingOffset) {
+    std::unordered_set<glm::vec3> doorIndices;
+    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color, float openingOffset) {
         glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
 
         glm::vec3 openingDir = glm::normalize(v1 - v0); //TODO
@@ -185,7 +213,12 @@ public:
         drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, color);
 
         printf("%f %f %f\n", openingV0.x, openingV0.y, openingV0.z);
-        openableDoors.push_back(OpenableDoor{ openingV0, 0.0f, glm::radians(90.0f), glm::radians(90.0f), CLOSED, COUNTERCLOCKWISE });
+
+        if(doorIndices.find(openingV0) == doorIndices.end()) {
+            doorIndices.insert(openingV0);
+            //TODO maybe flip 0.0f : glm::radians(90.0f), in initial rot
+            openableDoors.push_back(OpenableDoor{ openingV0, norm == glm::vec3(1.0f, 0.0f, 0.0f) ? glm::radians(90.0f) : 0.0f, glm::radians(90.0f), glm::radians(90.0f), CLOSED, COUNTERCLOCKWISE });
+        }
     }
 
     void addIndex(uint32_t v0, uint32_t v1, uint32_t v2) {
@@ -488,7 +521,7 @@ protected:
 
     Model<Vertex, DoorModelInstance> MDoor;
     DescriptorSet DSDoor;
-    UniformBlock uboDoor;
+    UniformBlockDoors uboDoor;
 
     std::vector<OpenableDoor> doors;
 
@@ -754,7 +787,7 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
         DSDoor.init(this, &DSLMesh, {
-                {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
                 {1, TEXTURE, 0,                    &T2}
         });
 
@@ -1103,6 +1136,11 @@ protected:
         uboDoor.mvpMat = ViewPrj * World;
         uboDoor.mMat = World;
         uboDoor.nMat = glm::inverse(glm::transpose(World));
+        int i = 0;
+        for(auto &door: doors) {
+            uboDoor.rot[i] = door.doorRot;
+            i++;
+        }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
 
         for (auto &mInfo: MV) {
