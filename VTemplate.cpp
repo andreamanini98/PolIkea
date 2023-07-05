@@ -176,7 +176,7 @@ inline std::vector<Room> generateFloorplan(float dimension) {
                 }
         );
 
-        if (0) {
+        if (static_cast<bool>(boolDistr(gen))) {
             std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomHeight - DOOR_HWIDTH);
 
             currentX += roomWidth;
