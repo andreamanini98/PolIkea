@@ -805,6 +805,7 @@ protected:
         DSPolikeaBuilding.cleanup();
         Door.DSDoor.cleanup();
         DSBuilding.cleanup();
+        DSSphere.cleanup();
 
         for (auto &mInfo: MV)
             mInfo.dsModel.cleanup();

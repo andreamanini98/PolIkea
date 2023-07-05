@@ -2435,8 +2435,10 @@ void Model<Vert, Instance>::cleanup() {
     vkFreeMemory(BP->device, indexBufferMemory, nullptr);
     vkDestroyBuffer(BP->device, vertexBuffer, nullptr);
     vkFreeMemory(BP->device, vertexBufferMemory, nullptr);
-    vkDestroyBuffer(BP->device, instanceBuffer, nullptr);
-    vkFreeMemory(BP->device, instanceBufferMemory, nullptr);
+    if(instanceBufferPresent) {
+        vkDestroyBuffer(BP->device, instanceBuffer, nullptr);
+        vkFreeMemory(BP->device, instanceBufferMemory, nullptr);
+    }
 }
 
 template <class Vert, class Instance>
