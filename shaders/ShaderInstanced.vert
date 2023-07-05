@@ -23,8 +23,19 @@ layout(location = 1) out vec3 fragNorm;
 layout(location = 2) out vec2 outUV;
 
 void main() {
-	gl_Position = ubo.mvpMat * vec4(inPosition + instancePos, 1.0);
-	fragPos = (ubo.mMat * vec4(inPosition + instancePos, 1.0)).xyz;
-	fragNorm = (ubo.nMat * vec4(inNorm, 0.0)).xyz;
+	float rot = ubo.rot[gl_InstanceIndex];
+	mat4 rotation = mat4(
+		vec4(cos(rot), 0.0, sin(rot), 0.0),
+		vec4(0.0, 1.0, 0.0, 0.0),
+		vec4(-sin(rot), 0.0, cos(rot), 0.0),
+		vec4(0.0, 0.0, 0.0, 1.0)
+	);
+
+	vec3 rotatedPosition = (rotation * vec4(inPosition, 1.0)).xyz;
+	vec3 rotatedNormal = (rotation * vec4(inNorm, 0.0)).xyz;
+
+	gl_Position = ubo.mvpMat * vec4(rotatedPosition + instancePos, 1.0);
+	fragPos = (ubo.mMat * vec4(rotatedPosition + instancePos, 1.0)).xyz;
+	fragNorm = (ubo.nMat * vec4(rotatedNormal, 0.0)).xyz;
 	outUV = inUV;
 }
