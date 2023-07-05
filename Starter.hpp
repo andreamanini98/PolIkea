@@ -1830,7 +1830,7 @@ std::cout << "Starting createInstance()\n"  << std::flush;
 		}
 	}
 
-	void getSixAxis(float &deltaT, glm::vec3 &m, glm::vec3 &r, bool &fire, bool &openDoor) {
+	void getSixAxis(float &deltaT, glm::vec3 &m, glm::vec3 &r, bool &fire /*, bool &openDoor*/) {
 		static auto startTime = std::chrono::high_resolution_clock::now();
 		static float lastTime = 0.0f;
 
@@ -1872,7 +1872,6 @@ std::cout << "Starting createInstance()\n"  << std::flush;
 		if(glfwGetKey(window, GLFW_KEY_E)) {
 			r.z = -1.0f;
 		}
-
 		if(glfwGetKey(window, GLFW_KEY_A)) {
 			m.x = -1.0f;
 		}
@@ -1891,9 +1890,9 @@ std::cout << "Starting createInstance()\n"  << std::flush;
 		if(glfwGetKey(window, GLFW_KEY_F)) {
 			m.y = -1.0f;
 		}
-        if(glfwGetKey(window, GLFW_KEY_O)) {
-            openDoor = !(openDoor);
-        }
+        //if(glfwGetKey(window, GLFW_KEY_O)) {
+        //    openDoor = !(openDoor);
+        //}
 
 		fire = glfwGetKey(window, GLFW_KEY_SPACE) | glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
 		handleGamePad(GLFW_JOYSTICK_1,m,r,fire);

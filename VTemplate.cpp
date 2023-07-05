@@ -3,6 +3,7 @@
 #include <filesystem>
 #include "Starter.hpp"
 #include "WorldView.hpp"
+#include "Parameters.hpp"
 #include <random>
 
 #define N_SPOTLIGHTS 50
@@ -112,10 +113,8 @@ class VertexStorage {
     std::vector<VertexVColor> &vPos;
     std::vector<uint32_t> &vIdx;
 public:
-    VertexStorage(std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx) : vPos(vPos), vIdx(vIdx),
-                                                                                  vertexCurIdx(vPos.size()) {
-
-    }
+    VertexStorage(std::vector<VertexVColor> &vPos,
+                  std::vector<uint32_t> &vIdx) : vPos(vPos), vIdx(vIdx), vertexCurIdx(vPos.size()) {}
 
     uint32_t addVertex(VertexVColor color) {
         vPos.push_back(color);
@@ -413,12 +412,6 @@ struct ModelInstance {
     glm::vec3 pos;
 };
 
-// Used to set bounds in buildings for the camera
-struct BoundingRectangle {
-    glm::vec3 bottomLeft;
-    glm::vec3 topRight;
-};
-
 enum DoorState {
     OPEN,
     CLOSED
@@ -485,37 +478,8 @@ protected:
     OpenableDoor Door;
 
     glm::vec3 polikeaBuildingPosition = glm::vec3(5.0f, 0.0f, -15.0f);
-    // TODO MAYBE FIND AN ALGORITHMIC WAY OR STORE THIS IN A FILE
-    std::vector<glm::vec3> polikeaBuildingOffsets = {
-            glm::vec3(-7.5f, 0.625f, -17.5f),
-            glm::vec3(-3.75f, 0.625f, -17.5f),
-            glm::vec3(0.0f, 0.625f, -17.5f),
-            glm::vec3(7.5f, 0.625f, -17.5f),
-            glm::vec3(-7.5f, 0.625f, -12.5f),
-            glm::vec3(-3.75f, 0.625f, -12.5f),
-            glm::vec3(0.0f, 0.625f, -12.5f),
-            glm::vec3(7.5f, 0.625f, -12.5f),
-            glm::vec3(-7.5f, 0.625f, -7.5f),
-            glm::vec3(-3.75f, 0.625f, -7.5f),
-            glm::vec3(0.0f, 0.625f, -7.5f),
-            glm::vec3(7.5f, 0.625f, -7.5f),
-            glm::vec3(-7.5f, 0.625f, -2.5f),
-            glm::vec3(-3.75f, 0.625f, -2.5f),
-            glm::vec3(0.0f, 0.625f, -2.5f)
-    };
-
-    std::vector<BoundingRectangle> boundingRectangles = {
-            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f, polikeaBuildingPosition.z + 0.5f),
-                              glm::vec3(polikeaBuildingPosition.x - 9.0f, 0.0f, polikeaBuildingPosition.z - 20.5f)},
-            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f, polikeaBuildingPosition.z - 18.5f),
-                              glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f, polikeaBuildingPosition.z - 20.5f)},
-            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x + 9.0f, 0.0f, polikeaBuildingPosition.z + 0.5f),
-                              glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f, polikeaBuildingPosition.z - 20.5f)},
-            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f, polikeaBuildingPosition.z + 0.5f),
-                              glm::vec3(polikeaBuildingPosition.x + 3.5f, 0.0f, polikeaBuildingPosition.z - 1.5f)},
-            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x + 6.5f, 0.0f, polikeaBuildingPosition.z + 0.5f),
-                              glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f, polikeaBuildingPosition.z - 1.5f)}
-    };
+    std::vector<glm::vec3> polikeaBuildingOffsets = getPolikeaBuildingOffsets();
+    std::vector<BoundingRectangle> boundingRectangles = getBoundingRectangles(polikeaBuildingPosition);
 
     glm::vec3 CamPos = glm::vec3(2.0, 0.7, 3.45706);;
     float CamAlpha = 0.0f;
@@ -842,7 +806,8 @@ protected:
         Door.DSDoor.cleanup();
         DSBuilding.cleanup();
 
-        for (auto &mInfo: MV) mInfo.dsModel.cleanup();
+        for (auto &mInfo: MV)
+            mInfo.dsModel.cleanup();
     }
 
     // Here you destroy all the Models, Texture and Desc. Set Layouts you created!
@@ -949,7 +914,6 @@ protected:
             glfwSetWindowShouldClose(window, GL_TRUE);
         }
 
-        // TODO maybe move to external function
         // ----- MOVE CAMERA AND OBJECTS LOGIC ----- //
         const float ROT_SPEED = glm::radians(120.0f);
         const float MOVE_SPEED = 4.0f;
@@ -962,8 +926,8 @@ protected:
         float deltaT;
         auto m = glm::vec3(0.0f), r = glm::vec3(0.0f);
         bool fire = false;
-        static bool openDoor = false;
-        getSixAxis(deltaT, m, r, fire, openDoor);
+        //static bool openDoor = false;
+        getSixAxis(deltaT, m, r, fire /*openDoor see line 1833 in Starter.hpp. Useless if doors are automatic*/);
 
         CamAlpha = CamAlpha - ROT_SPEED * deltaT * r.y;
         CamBeta = CamBeta - ROT_SPEED * deltaT * r.x;
@@ -1022,8 +986,7 @@ protected:
             MV[MoveObjIndex].modelRot = CamAlpha;
         }
 
-        //TODO ADD DEBOUNCING
-        if (openDoor && Door.doorState == CLOSED) {
+        if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
             if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
                 Door.doorRot += Door.doorSpeed * deltaT;
                 if (Door.doorRot >= Door.doorRange)
@@ -1034,7 +997,7 @@ protected:
                 if (Door.doorRot <= Door.doorRange - glm::radians(180.0f))
                     Door.doorState = OPEN;
             }
-        } else if (!openDoor && Door.doorState == OPEN) {
+        } else if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
             if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
                 Door.doorRot -= Door.doorSpeed * deltaT;
                 if (Door.doorRot <= 0.0f)
@@ -1064,7 +1027,8 @@ protected:
                             MoveObjIndex = i;
                         }
                     }
-                    if (distance > threshold) OnlyMoveCam = true;
+                    if (distance > threshold)
+                        OnlyMoveCam = true;
                 }
             }
         } else {
