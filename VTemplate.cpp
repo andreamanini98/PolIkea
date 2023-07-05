@@ -474,18 +474,18 @@ protected:
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
     // Models
-    Model<Vertex> MFloorGrid;
+    Model<Vertex> MFloorGrid, MDoor;
     Model<VertexOverlay> MOverlay;
     Model<VertexVColor> MPolikeaBuilding;
 
     Model<VertexVColor> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
+    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSDoor;
     // Textures
     Texture T1, T2, TOverlayMoveObject;
     // C++ storage for uniform variables
-    UniformBlock uboGrid, uboPolikea, uboBuilding;
+    UniformBlock uboGrid, uboPolikea, uboBuilding, uboDoor;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
 
@@ -668,6 +668,7 @@ protected:
         MBuilding.initMesh(this, &VVertexWithColor);
 
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
+        MDoor.init(this, &VMesh, "models/door_009_Mesh.112.mgcg", MGCG);
 
         // Create the textures
         // The second parameter is the file name
@@ -754,6 +755,10 @@ protected:
         DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
+        DSDoor.init(this, &DSLMesh, {
+                {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                {1, TEXTURE, 0,                    &T2}
+        });
 
         DSBuilding.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
@@ -780,6 +785,7 @@ protected:
         DSGubo.cleanup();
         DSOverlayMoveOject.cleanup();
         DSPolikeaBuilding.cleanup();
+        DSDoor.cleanup();
         DSBuilding.cleanup();
 
         for (auto &mInfo: MV) mInfo.dsModel.cleanup();
@@ -799,6 +805,7 @@ protected:
         MFloorGrid.cleanup();
         MOverlay.cleanup();
         MPolikeaBuilding.cleanup();
+        MDoor.cleanup();
         MBuilding.cleanup();
         for (auto &mInfo: MV)
             mInfo.model.cleanup();
@@ -850,6 +857,10 @@ protected:
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
 
+        DSDoor.bind(commandBuffer, PMesh, 1, currentImage);
+        MDoor.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), 1, 0, 0, 0);
+
         //--- PIPELINE OVERLAY ---
         POverlay.bind(commandBuffer);
         MOverlay.bind(commandBuffer);
@@ -880,7 +891,7 @@ protected:
         // TODO maybe move to external function
         // ----- MOVE CAMERA AND OBJECTS LOGIC ----- //
         const float ROT_SPEED = glm::radians(120.0f);
-        const float MOVE_SPEED = 2.0f;
+        const float MOVE_SPEED = 4.0f;
 
         static bool debounce = false;
         static int curDebounce = 0;
@@ -1011,6 +1022,14 @@ protected:
         uboPolikea.nMat = glm::inverse(glm::transpose(World));
         DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
 
+        uboDoor.amb = 0.05f;
+        uboDoor.gamma = 180.0f;
+        uboDoor.sColor = glm::vec3(1.0f);
+        uboDoor.mvpMat = ViewPrj * glm::translate(glm::mat4(1), glm::vec3(0.0, 0.0, 0.0)) * World;
+        uboDoor.mMat = glm::translate(glm::mat4(1), glm::vec3(0.0, 0.0, 0.0)) * World;
+        uboDoor.nMat = glm::inverse(glm::transpose(World));
+        DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
+
         uboBuilding.amb = 0.05f;
         uboBuilding.gamma = 180.0f;
         uboBuilding.sColor = glm::vec3(1.0f);
@@ -1018,7 +1037,6 @@ protected:
         uboBuilding.mMat = glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
         uboBuilding.nMat = glm::inverse(glm::transpose(World));
         DSBuilding.map(currentImage, &uboBuilding, sizeof(uboBuilding), 0);
-
 
         bool displayKey = false;
         for (std::size_t i = 1; i < MV.size(); ++i) {
