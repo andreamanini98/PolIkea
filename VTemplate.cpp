@@ -26,16 +26,6 @@ enum Direction {
     WEST
 };
 
-enum DoorState {
-    OPEN,
-    CLOSED
-};
-
-enum DoorOpeningDirection {
-    CLOCKWISE,
-    COUNTERCLOCKWISE
-};
-
 struct Door {
     float offset;
     Direction direction;
@@ -429,6 +419,29 @@ struct BoundingRectangle {
     glm::vec3 topRight;
 };
 
+enum DoorState {
+    OPEN,
+    CLOSED
+};
+
+enum DoorOpeningDirection {
+    CLOCKWISE,
+    COUNTERCLOCKWISE
+};
+
+struct OpenableDoor {
+    glm::vec3 doorPos;
+    float doorRot;
+    float doorSpeed;
+    float doorRange;
+    DoorState doorState;
+    DoorOpeningDirection doorOpeningDirection;
+    Model<Vertex> MDoor;
+    DescriptorSet DSDoor;
+    UniformBlock uboDoor;
+};
+
+
 // MAIN !
 class VTemplate : public BaseProject {
 protected:
@@ -448,7 +461,7 @@ protected:
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
     // Models
-    Model<Vertex> MFloorGrid, MDoor;
+    Model<Vertex> MFloorGrid;
     Model<VertexOverlay> MOverlay;
     Model<VertexVColor> MPolikeaBuilding;
 
@@ -457,11 +470,11 @@ protected:
     Model<VertexVColor> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSDoor, DSSphere;
+    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSSphere;
     // Textures
     Texture T1, T2, TOverlayMoveObject;
     // C++ storage for uniform variables
-    UniformBlock uboGrid, uboPolikea, uboBuilding, uboDoor;
+    UniformBlock uboGrid, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
 
@@ -469,7 +482,9 @@ protected:
     // A vector containing one element for each model loaded where we want to keep track of its information
     std::vector<ModelInfo> MV;
 
-    glm::vec3 polikeaBuildingPosition = glm::vec3(15.0f, 0.0f, -15.0f);
+    OpenableDoor Door;
+
+    glm::vec3 polikeaBuildingPosition = glm::vec3(5.0f, 0.0f, -15.0f);
     // TODO MAYBE FIND AN ALGORITHMIC WAY OR STORE THIS IN A FILE
     std::vector<glm::vec3> polikeaBuildingOffsets = {
             glm::vec3(-7.5f, 0.625f, -17.5f),
@@ -501,14 +516,6 @@ protected:
             BoundingRectangle{glm::vec3(polikeaBuildingPosition.x + 6.5f, 0.0f, polikeaBuildingPosition.z + 0.5f),
                               glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f, polikeaBuildingPosition.z - 1.5f)}
     };
-
-    // Doors parameters
-    glm::vec3 doorPos = glm::vec3(1.0f, 0.0f, 1.0f);
-    float doorRot = 0.0f;
-    const float doorSpeed = glm::radians(90.0f);
-    const float doorRange = glm::radians(90.0f);
-    DoorState doorState = CLOSED;
-    DoorOpeningDirection doorOpeningDirection = COUNTERCLOCKWISE;
 
     glm::vec3 CamPos = glm::vec3(2.0, 0.7, 3.45706);;
     float CamAlpha = 0.0f;
@@ -688,7 +695,14 @@ protected:
         MBuilding.initMesh(this, &VVertexWithColor);
 
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
-        MDoor.init(this, &VMesh, "models/door_009_Mesh.112.mgcg", MGCG);
+
+        Door.doorPos = glm::vec3(1.0f, 0.0f, 1.0f);
+        Door.doorRot = 0.0f;
+        Door.doorSpeed = glm::radians(90.0f);
+        Door.doorRange = glm::radians(90.0f);
+        Door.doorState = CLOSED;
+        Door.doorOpeningDirection = COUNTERCLOCKWISE;
+        Door.MDoor.init(this, &VMesh, "models/door_009_Mesh.112.mgcg", MGCG);
 
         MSphere.vertices = {{{-0.7f, 0.70f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
                             {{-0.7f, 0.93f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
@@ -790,7 +804,7 @@ protected:
         DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
-        DSDoor.init(this, &DSLMesh, {
+        Door.DSDoor.init(this, &DSLMesh, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
                 {1, TEXTURE, 0,                    &T2}
         });
@@ -825,7 +839,7 @@ protected:
         DSGubo.cleanup();
         DSOverlayMoveOject.cleanup();
         DSPolikeaBuilding.cleanup();
-        DSDoor.cleanup();
+        Door.DSDoor.cleanup();
         DSBuilding.cleanup();
 
         for (auto &mInfo: MV) mInfo.dsModel.cleanup();
@@ -845,7 +859,7 @@ protected:
         MFloorGrid.cleanup();
         MOverlay.cleanup();
         MPolikeaBuilding.cleanup();
-        MDoor.cleanup();
+        Door.MDoor.cleanup();
         MBuilding.cleanup();
         MSphere.cleanup();
         for (auto &mInfo: MV)
@@ -900,9 +914,9 @@ protected:
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
 
-        DSDoor.bind(commandBuffer, PMesh, 1, currentImage);
-        MDoor.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), 1, 0, 0, 0);
+        Door.DSDoor.bind(commandBuffer, PMesh, 1, currentImage);
+        Door.MDoor.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(Door.MDoor.indices.size()), 1, 0, 0, 0);
 
         //--- PIPELINE OVERLAY ---
         POverlay.bind(commandBuffer);
@@ -973,7 +987,7 @@ protected:
             if (CamPos.x >= boundingRectangle.bottomLeft.x && CamPos.x <= boundingRectangle.topRight.x &&
                 CamPos.z <= boundingRectangle.bottomLeft.z && CamPos.z >= boundingRectangle.topRight.z) {
                 CamPos = CamPos - MOVE_SPEED * m.x * ux * deltaT;
-                CamPos = CamPos - MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT; //Do not allow to fly
+                CamPos = CamPos - MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT;
                 CamPos = CamPos - MOVE_SPEED * m.z * uz * deltaT;
             }
         }
@@ -1009,27 +1023,27 @@ protected:
         }
 
         //TODO ADD DEBOUNCING
-        if (openDoor && doorState == CLOSED) {
-            if (doorOpeningDirection == COUNTERCLOCKWISE) {
-                doorRot += doorSpeed * deltaT;
-                if (doorRot >= doorRange)
-                    doorState = OPEN;
+        if (openDoor && Door.doorState == CLOSED) {
+            if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
+                Door.doorRot += Door.doorSpeed * deltaT;
+                if (Door.doorRot >= Door.doorRange)
+                    Door.doorState = OPEN;
             }
-            if (doorOpeningDirection == CLOCKWISE) {
-                doorRot -= doorSpeed * deltaT;
-                if (doorRot <= doorRange - glm::radians(180.0f))
-                    doorState = OPEN;
+            if (Door.doorOpeningDirection == CLOCKWISE) {
+                Door.doorRot -= Door.doorSpeed * deltaT;
+                if (Door.doorRot <= Door.doorRange - glm::radians(180.0f))
+                    Door.doorState = OPEN;
             }
-        } else if (!openDoor && doorState == OPEN) {
-            if (doorOpeningDirection == COUNTERCLOCKWISE) {
-                doorRot -= doorSpeed * deltaT;
-                if (doorRot <= 0.0f)
-                    doorState = CLOSED;
+        } else if (!openDoor && Door.doorState == OPEN) {
+            if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
+                Door.doorRot -= Door.doorSpeed * deltaT;
+                if (Door.doorRot <= 0.0f)
+                    Door.doorState = CLOSED;
             }
-            if (doorOpeningDirection == CLOCKWISE) {
-                doorRot += doorSpeed * deltaT;
-                if (doorRot >= 0.0f)
-                    doorState = CLOSED;
+            if (Door.doorOpeningDirection == CLOCKWISE) {
+                Door.doorRot += Door.doorSpeed * deltaT;
+                if (Door.doorRot >= 0.0f)
+                    Door.doorState = CLOSED;
             }
         }
 
@@ -1140,14 +1154,14 @@ protected:
         DSFloorGrid.map(currentImage, &uboGrid, sizeof(uboGrid), 0);
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
-        World = MakeWorldMatrix(doorPos, doorRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
-        uboDoor.amb = 0.05f;
-        uboDoor.gamma = 180.0f;
-        uboDoor.sColor = glm::vec3(1.0f);
-        uboDoor.mvpMat = ViewPrj * World;
-        uboDoor.mMat = World;
-        uboDoor.nMat = glm::inverse(glm::transpose(World));
-        DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
+        World = MakeWorldMatrix(Door.doorPos, Door.doorRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
+        Door.uboDoor.amb = 0.05f;
+        Door.uboDoor.gamma = 180.0f;
+        Door.uboDoor.sColor = glm::vec3(1.0f);
+        Door.uboDoor.mvpMat = ViewPrj * World;
+        Door.uboDoor.mMat = World;
+        Door.uboDoor.nMat = glm::inverse(glm::transpose(World));
+        Door.DSDoor.map(currentImage, &Door.uboDoor, sizeof(Door.uboDoor), 0);
 
         for (auto &mInfo: MV) {
             World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
