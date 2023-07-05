@@ -150,13 +150,14 @@ public:
         }
     }
 
-    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color, float openingOffset) {
+    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color,
+                             float openingOffset) {
         glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
 
         glm::vec3 openingDir = glm::normalize(v1 - v0); //TODO
         glm::vec3 openingUpDir = glm::vec3(0.0f, 1.0f, 0.0f);
-        glm::vec3 openingV0 = openingDir * (openingOffset-DOOR_HWIDTH) + v0;
-        glm::vec3 openingV1 = openingDir * (openingOffset+DOOR_HWIDTH) + v0;
+        glm::vec3 openingV0 = openingDir * (openingOffset - DOOR_HWIDTH) + v0;
+        glm::vec3 openingV1 = openingDir * (openingOffset + DOOR_HWIDTH) + v0;
         glm::vec3 openingV2 = openingV1 + openingUpDir * DOOR_HEIGHT;
         glm::vec3 openingV3 = openingV0 + openingUpDir * DOOR_HEIGHT;
 
@@ -242,21 +243,21 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
         auto color = glm::vec3((test % 3) == 0, (test % 3) == 1, (test % 3) == 2);
 
         storage.drawRect(
-            glm::vec3(room.startX,              0, room.startY),
-            glm::vec3(room.startX + room.width, 0, room.startY),
-            glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
-            glm::vec3(room.startX,              0, room.startY + room.depth),
-            -1,
-            color
+                glm::vec3(room.startX, 0, room.startY),
+                glm::vec3(room.startX + room.width, 0, room.startY),
+                glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
+                glm::vec3(room.startX, 0, room.startY + room.depth),
+                -1,
+                color
         );
 
         storage.drawRect(
-            glm::vec3(room.startX            , ROOM_CEILING_HEIGHT, room.startY               ),
-            glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY              ),
-            glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-            glm::vec3(room.startX             , ROOM_CEILING_HEIGHT, room.startY + room.depth),
-            1,
-            color
+                glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
+                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
+                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                1,
+                color
         );
 
         bool hasDoorNorth = false;
@@ -289,50 +290,50 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
 
         if (hasDoorSouth) {
             storage.drawRectWithOpening(
-                glm::vec3(room.startX             , 0                  , room.startY),
-                glm::vec3(room.startX + room.width, 0                  , room.startY),
-                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                glm::vec3(room.startX             , ROOM_CEILING_HEIGHT, room.startY),
-                1,
-                color,
-                offsetSouth
+                    glm::vec3(room.startX, 0, room.startY),
+                    glm::vec3(room.startX + room.width, 0, room.startY),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
+                    1,
+                    color,
+                    offsetSouth
             );
         } else {
             storage.drawRect(
-                glm::vec3(room.startX             , 0                  , room.startY),
-                glm::vec3(room.startX + room.width, 0                  , room.startY),
-                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                glm::vec3(room.startX             , ROOM_CEILING_HEIGHT, room.startY),
-                1,
-                color
+                    glm::vec3(room.startX, 0, room.startY),
+                    glm::vec3(room.startX + room.width, 0, room.startY),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
+                    1,
+                    color
             );
         }
 
         if (hasDoorNorth) {
             storage.drawRectWithOpening(
-                glm::vec3(room.startX             , 0                  , room.startY + room.depth),
-                glm::vec3(room.startX + room.width, 0                  , room.startY + room.depth),
-                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                glm::vec3(room.startX             , ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                -1,
-                color,
-                offsetNorth
+                    glm::vec3(room.startX, 0, room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    -1,
+                    color,
+                    offsetNorth
             );
         } else {
             storage.drawRect(
-                    glm::vec3(room.startX             , 0                  , room.startY + room.depth),
-                    glm::vec3(room.startX + room.width, 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX, 0, room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    glm::vec3(room.startX             , ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                -1,
-                color
+                    glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    -1,
+                    color
             );
         }
 
         if (hasDoorWest) {
             storage.drawRectWithOpening(
-                    glm::vec3(room.startX, 0                 , room.startY),
-                    glm::vec3(room.startX, 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX, 0, room.startY),
+                    glm::vec3(room.startX, 0, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
                     -1,
@@ -341,8 +342,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
             );
         } else {
             storage.drawRect(
-                    glm::vec3(room.startX, 0                 , room.startY),
-                    glm::vec3(room.startX, 0                  , room.startY + room.depth),
+                    glm::vec3(room.startX, 0, room.startY),
+                    glm::vec3(room.startX, 0, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
                     -1,
@@ -352,22 +353,22 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
 
         if (hasDoorEast) {
             storage.drawRectWithOpening(
-                glm::vec3(room.startX + room.width, 0                  , room.startY),
-                glm::vec3(room.startX + room.width, 0                  , room.startY + room.depth),
-                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                1,
-                color,
-                offsetEast
+                    glm::vec3(room.startX + room.width, 0, room.startY),
+                    glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
+                    1,
+                    color,
+                    offsetEast
             );
         } else {
             storage.drawRect(
-                glm::vec3(room.startX + room.width, 0                  , room.startY),
-                glm::vec3(room.startX + room.width, 0                  , room.startY + room.depth),
-                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                1,
-                color
+                    glm::vec3(room.startX + room.width, 0, room.startY),
+                    glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
+                    glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
+                    1,
+                    color
             );
         }
 
@@ -422,6 +423,12 @@ struct ModelInstance {
     glm::vec3 pos;
 };
 
+// Used to set bounds in buildings for the camera
+struct BoundingRectangle {
+    glm::vec3 bottomLeft;
+    glm::vec3 topRight;
+};
+
 // MAIN !
 class VTemplate : public BaseProject {
 protected:
@@ -462,7 +469,7 @@ protected:
     // A vector containing one element for each model loaded where we want to keep track of its information
     std::vector<ModelInfo> MV;
 
-    glm::vec3 polikeaBuildingPosition = glm::vec3(5.0f, 0.0f, -15.0f);
+    glm::vec3 polikeaBuildingPosition = glm::vec3(15.0f, 0.0f, -15.0f);
     // TODO MAYBE FIND AN ALGORITHMIC WAY OR STORE THIS IN A FILE
     std::vector<glm::vec3> polikeaBuildingOffsets = {
             glm::vec3(-7.5f, 0.625f, -17.5f),
@@ -480,6 +487,19 @@ protected:
             glm::vec3(-7.5f, 0.625f, -2.5f),
             glm::vec3(-3.75f, 0.625f, -2.5f),
             glm::vec3(0.0f, 0.625f, -2.5f)
+    };
+
+    std::vector<BoundingRectangle> boundingRectangles = {
+            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f, polikeaBuildingPosition.z + 0.5f),
+                              glm::vec3(polikeaBuildingPosition.x - 9.0f, 0.0f, polikeaBuildingPosition.z - 20.5f)},
+            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f, polikeaBuildingPosition.z - 18.5f),
+                              glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f, polikeaBuildingPosition.z - 20.5f)},
+            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x + 9.0f, 0.0f, polikeaBuildingPosition.z + 0.5f),
+                              glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f, polikeaBuildingPosition.z - 20.5f)},
+            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f, polikeaBuildingPosition.z + 0.5f),
+                              glm::vec3(polikeaBuildingPosition.x + 3.5f, 0.0f, polikeaBuildingPosition.z - 1.5f)},
+            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x + 6.5f, 0.0f, polikeaBuildingPosition.z + 0.5f),
+                              glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f, polikeaBuildingPosition.z - 1.5f)}
     };
 
     // Doors parameters
@@ -637,7 +657,8 @@ protected:
                                {&DSLGubo, &DSLVertexWithColors});
         //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PInstanceRendering.init(this, &VVertexWithColorInstance, "shaders/VColorVertInstance.spv", "shaders/VColorFragInstance.spv",{&DSLGubo, &DSLSphere});
+        PInstanceRendering.init(this, &VVertexWithColorInstance, "shaders/VColorVertInstance.spv",
+                                "shaders/VColorFragInstance.spv", {&DSLGubo, &DSLSphere});
         PInstanceRendering.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
 
@@ -670,14 +691,14 @@ protected:
         MDoor.init(this, &VMesh, "models/door_009_Mesh.112.mgcg", MGCG);
 
         MSphere.vertices = {{{-0.7f, 0.70f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
-                               {{-0.7f, 0.93f, 0.5f},  {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
-                               {{0.7f, 0.70f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
-                               {{0.7f, 0.93f, 0.5f},  {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}}};
+                            {{-0.7f, 0.93f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
+                            {{0.7f,  0.70f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}},
+                            {{0.7f,  0.93f, 0.5f}, {0.0, 0.0, 1.0}, {1.0f, 1.0f, 1.0f}}};
         MSphere.instanceBufferPresent = true;
         MSphere.instances = {
-                ModelInstance{ glm::vec3(0.0f, -0.1f, 0.0f) },
-                ModelInstance{ glm::vec3(0.0f, -0.4f, 0.0f) },
-                ModelInstance{ glm::vec3(0.0f, -0.9f, 0.0f) }
+                ModelInstance{glm::vec3(0.0f, -0.1f, 0.0f)},
+                ModelInstance{glm::vec3(0.0f, -0.4f, 0.0f)},
+                ModelInstance{glm::vec3(0.0f, -0.9f, 0.0f)}
         };
         MSphere.indices = {0, 1, 2, 3, 2, 1};
         MSphere.initMesh(this, &VVertexWithColorInstance);
@@ -903,7 +924,7 @@ protected:
         DSGubo.bind(commandBuffer, PInstanceRendering, 0, currentImage);
         DSSphere.bind(commandBuffer, PInstanceRendering, 1, currentImage);
         MSphere.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MSphere.indices.size()), 3, 0, 0, 0);
+        //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MSphere.indices.size()), 3, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
@@ -947,6 +968,16 @@ protected:
         CamPos = CamPos + MOVE_SPEED * m.x * ux * deltaT;
         CamPos = CamPos + MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT; //Do not allow to fly
         CamPos = CamPos + MOVE_SPEED * m.z * uz * deltaT;
+
+        for (auto &boundingRectangle: boundingRectangles) {
+            if (CamPos.x >= boundingRectangle.bottomLeft.x && CamPos.x <= boundingRectangle.topRight.x &&
+                CamPos.z <= boundingRectangle.bottomLeft.z && CamPos.z >= boundingRectangle.topRight.z) {
+                CamPos = CamPos - MOVE_SPEED * m.x * ux * deltaT;
+                CamPos = CamPos - MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT; //Do not allow to fly
+                CamPos = CamPos - MOVE_SPEED * m.z * uz * deltaT;
+            }
+        }
+
         if (!OnlyMoveCam) {
             const glm::vec3 modelPos = glm::vec3(
                     CamPos.x,
@@ -977,6 +1008,7 @@ protected:
             MV[MoveObjIndex].modelRot = CamAlpha;
         }
 
+        //TODO ADD DEBOUNCING
         if (openDoor && doorState == CLOSED) {
             if (doorOpeningDirection == COUNTERCLOCKWISE) {
                 doorRot += doorSpeed * deltaT;
@@ -1078,8 +1110,8 @@ protected:
         uboBuilding.amb = 0.05f;
         uboBuilding.gamma = 180.0f;
         uboBuilding.sColor = glm::vec3(1.0f);
-        uboBuilding.mvpMat = ViewPrj * glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
-        uboBuilding.mMat = glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, -15.0)) * World;
+        uboBuilding.mvpMat = ViewPrj * glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, 15.0)) * World;
+        uboBuilding.mMat = glm::translate(glm::mat4(1), glm::vec3(15.0, 0.0, 15.0)) * World;
         uboBuilding.nMat = glm::inverse(glm::transpose(World));
         DSBuilding.map(currentImage, &uboBuilding, sizeof(uboBuilding), 0);
 
