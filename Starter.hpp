@@ -232,13 +232,17 @@ struct LightParameters {
         SpotLightParameters spot;
     } parameters;
 };
-
-template <class Vert>
+class Empty {};
+template <class Vert, class Instance = Empty>
 class Model {
 	BaseProject *BP;
 
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
+
+    VkBuffer instanceBuffer;
+    VkDeviceMemory instanceBufferMemory;
+
 	VkBuffer indexBuffer;
 	VkDeviceMemory indexBufferMemory;
 	VertexDescriptor *VD;
@@ -246,11 +250,14 @@ class Model {
 	public:
     std::vector<LightParameters> lights;
 	std::vector<Vert> vertices{};
+    bool instanceBufferPresent = false;
+    std::vector<Instance> instances{};
 	std::vector<uint32_t> indices{};
 	void loadModelOBJ(std::string file);
 	void loadModelGLTF(std::string file, bool encoded);
 	void createIndexBuffer();
 	void createVertexBuffer();
+    void createInstanceBuffer();
 
 	void init(BaseProject *bp, VertexDescriptor *VD, std::string file, ModelType MT);
 	void initMesh(BaseProject *bp, VertexDescriptor *VD);
@@ -358,7 +365,7 @@ struct DescriptorSet {
 // MAIN ! 
 class BaseProject {
 	friend class VertexDescriptor;
-	template <class Vert> friend class Model;
+	template <class Vert, class Instance> friend class Model;
 	friend class Texture;
 	friend class Pipeline;
 	friend class DescriptorSetLayout;
@@ -1938,7 +1945,7 @@ void VertexDescriptor::init(BaseProject *bp, std::vector<VertexBindingDescriptor
 	Color.hasIt = false; Color.offset = 0;
 	Tangent.hasIt = false; Tangent.offset = 0;
 
-	if(B.size() == 1) {	// for now, read models only with every vertex information in a single binding
+	if(/*B.size() == 1*/ 1) {	// for now, read models only with every vertex information in a single binding
 		for(int i = 0; i < E.size(); i++) {
 			switch(E[i].usage) {
 			  case VertexDescriptorElementUsage::POSITION:
@@ -2039,8 +2046,8 @@ std::vector<VkVertexInputAttributeDescription> VertexDescriptor::getAttributeDes
 
 
 
-template <class Vert>
-void Model<Vert>::loadModelOBJ(std::string file) {
+template <class Vert, class Instance>
+void Model<Vert, Instance>::loadModelOBJ(std::string file) {
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
@@ -2107,8 +2114,8 @@ void Model<Vert>::loadModelOBJ(std::string file) {
 
 }
 
-template <class Vert>
-void Model<Vert>::loadModelGLTF(std::string file, bool encoded) {
+template <class Vert, class Instance>
+void Model<Vert, Instance>::loadModelGLTF(std::string file, bool encoded) {
 	tinygltf::Model model;
 	tinygltf::TinyGLTF loader;
 	std::string warn, err;
@@ -2348,8 +2355,8 @@ void Model<Vert>::loadModelGLTF(std::string file, bool encoded) {
 			  << "\nIndices: " << indices.size() << "\n";
 }
 
-template <class Vert>
-void Model<Vert>::createVertexBuffer() {
+template <class Vert, class Instance>
+void Model<Vert, Instance>::createVertexBuffer() {
 	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
 	BP->createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -2363,8 +2370,23 @@ void Model<Vert>::createVertexBuffer() {
 	vkUnmapMemory(BP->device, vertexBufferMemory);
 }
 
-template <class Vert>
-void Model<Vert>::createIndexBuffer() {
+template <class Vert, class Instance>
+void Model<Vert, Instance>::createInstanceBuffer() {
+    VkDeviceSize bufferSize = sizeof(instances[0]) * instances.size();
+    instanceBufferPresent = true;
+    BP->createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                     instanceBuffer, instanceBufferMemory);
+
+    void* data;
+    vkMapMemory(BP->device, instanceBufferMemory, 0, bufferSize, 0, &data);
+    memcpy(data, instances.data(), (size_t) bufferSize);
+    vkUnmapMemory(BP->device, instanceBufferMemory);
+}
+
+template <class Vert, class Instance>
+void Model<Vert, Instance>::createIndexBuffer() {
 	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
 	BP->createBuffer(bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -2378,18 +2400,19 @@ void Model<Vert>::createIndexBuffer() {
 	vkUnmapMemory(BP->device, indexBufferMemory);
 }
 
-template <class Vert>
-void Model<Vert>::initMesh(BaseProject *bp, VertexDescriptor *vd) {
+template <class Vert, class Instance>
+void Model<Vert, Instance>::initMesh(BaseProject *bp, VertexDescriptor *vd) {
 	BP = bp;
 	VD = vd;
 	std::cout << "[Manual] Vertices: " << vertices.size()
 			  << "\nIndices: " << indices.size() << "\n";
 	createVertexBuffer();
+    if(instanceBufferPresent) createInstanceBuffer();
 	createIndexBuffer();
 }
 
-template <class Vert>
-void Model<Vert>::init(BaseProject *bp, VertexDescriptor *vd, std::string file, ModelType MT) {
+template <class Vert, class Instance>
+void Model<Vert, Instance>::init(BaseProject *bp, VertexDescriptor *vd, std::string file, ModelType MT) {
 	BP = bp;
 	VD = vd;
 	if(MT == OBJ) {
@@ -2404,20 +2427,26 @@ void Model<Vert>::init(BaseProject *bp, VertexDescriptor *vd, std::string file, 
 	createIndexBuffer();
 }
 
-template <class Vert>
-void Model<Vert>::cleanup() {
-   	vkDestroyBuffer(BP->device, indexBuffer, nullptr);
-   	vkFreeMemory(BP->device, indexBufferMemory, nullptr);
-	vkDestroyBuffer(BP->device, vertexBuffer, nullptr);
-   	vkFreeMemory(BP->device, vertexBufferMemory, nullptr);
+template <class Vert, class Instance>
+void Model<Vert, Instance>::cleanup() {
+    vkDestroyBuffer(BP->device, indexBuffer, nullptr);
+    vkFreeMemory(BP->device, indexBufferMemory, nullptr);
+    vkDestroyBuffer(BP->device, vertexBuffer, nullptr);
+    vkFreeMemory(BP->device, vertexBufferMemory, nullptr);
+    vkDestroyBuffer(BP->device, instanceBuffer, nullptr);
+    vkFreeMemory(BP->device, instanceBufferMemory, nullptr);
 }
 
-template <class Vert>
-void Model<Vert>::bind(VkCommandBuffer commandBuffer) {
+template <class Vert, class Instance>
+void Model<Vert, Instance>::bind(VkCommandBuffer commandBuffer) {
 	VkBuffer vertexBuffers[] = {vertexBuffer};
 	// property .vertexBuffer of models, contains the VkBuffer handle to its vertex buffer
 	VkDeviceSize offsets[] = {0};
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    if(instanceBufferPresent) {
+        VkBuffer instanceBuffers[] = {instanceBuffer};
+        vkCmdBindVertexBuffers(commandBuffer, 1, 1, instanceBuffers, offsets);
+    }
 	// property .indexBuffer of models, contains the VkBuffer handle to its index buffer
 	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0,
 							VK_INDEX_TYPE_UINT32);

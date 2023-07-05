@@ -455,6 +455,10 @@ struct ModelInfo {
     }
 };
 
+struct ModelInstance {
+    glm::vec3 pos;
+};
+
 // MAIN !
 class VTemplate : public BaseProject {
 protected:
@@ -463,13 +467,13 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLGubo, DSLOverlay, DSLVertexWithColors;
+    DescriptorSetLayout DSLMesh, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLSphere;
 
     // Vertex formats
-    VertexDescriptor VMesh, VOverlay, VVertexWithColor;
+    VertexDescriptor VMesh, VOverlay, VVertexWithColor, VVertexWithColorInstance;
 
     // Pipelines [Shader couples]
-    Pipeline PMesh, POverlay, PVertexWithColors;
+    Pipeline PMesh, POverlay, PVertexWithColors, PInstanceRendering;
 
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
@@ -478,10 +482,12 @@ protected:
     Model<VertexOverlay> MOverlay;
     Model<VertexVColor> MPolikeaBuilding;
 
+    Model<VertexVColor, ModelInstance> MSphere;
+
     Model<VertexVColor> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
+    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSSphere;
     // Textures
     Texture T1, T2, TOverlayMoveObject;
     // C++ storage for uniform variables
@@ -570,6 +576,10 @@ protected:
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
 
+        DSLSphere.init(this, {
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
+        });
+
         // Vertex descriptors
         VMesh.init(this, {
                 // This array contains the bindings:
@@ -627,6 +637,20 @@ protected:
                                               sizeof(glm::vec3), COLOR}
                               });
 
+        VVertexWithColorInstance.init(this, {
+                {0, sizeof(VertexVColor), VK_VERTEX_INPUT_RATE_VERTEX},
+                {1, sizeof(ModelInstance),    VK_VERTEX_INPUT_RATE_INSTANCE}
+        }, {
+                                              {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, pos),
+                                                      sizeof(glm::vec3), POSITION},
+                                              {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, norm),
+                                                      sizeof(glm::vec3), NORMAL},
+                                              {0, 2, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, color),
+                                                      sizeof(glm::vec3), COLOR},
+                                              {1, 3, VK_FORMAT_R32G32B32_SFLOAT, offsetof(ModelInstance, pos),
+                                                      sizeof(glm::vec3), OTHER},
+                                      });
+
         // Pipelines [Shader couples]
         // The second parameter is the pointer to the vertex definition
         // Third and fourth parameters are respectively the vertex and fragment shaders
@@ -641,6 +665,11 @@ protected:
         PVertexWithColors.init(this, &VVertexWithColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv",
                                {&DSLGubo, &DSLVertexWithColors});
         //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
+
+        PInstanceRendering.init(this, &VVertexWithColorInstance, "shaders/VColorVertInstance.spv", "shaders/VColorFrag.spv",
+                                {&DSLGubo, &DSLSphere});
+        PInstanceRendering.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
+
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
@@ -668,6 +697,19 @@ protected:
         MBuilding.initMesh(this, &VVertexWithColor);
 
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
+
+        MSphere.vertices = {{{-6, 0, -6}, {0.0, 1.0, 0.0}, {0.0f, 0.0f, 1.0f}},
+                               {{-6, 0, 6},  {0.0, 1.0, 0.0}, {0.0f, 1.0f, 0.0f}},
+                               {{6,  0, -6}, {0.0, 1.0, 0.0}, {1.0f, 0.0f, 0.0f}},
+                               {{6,  0, 6},  {0.0, 1.0, 0.0}, {0.0f, 1.0f, 0.0f}}};
+        MSphere.instanceBufferPresent = true;
+        MSphere.instances = {
+                ModelInstance{ glm::vec3(0.0f, 0.0f, 0.0f) },
+                ModelInstance{ glm::vec3(0.0f, 2.0f, 0.0f) },
+                ModelInstance{ glm::vec3(0.0f, 4.0f, 0.0f) }
+        };
+        MSphere.indices = {0, 1, 2, 1, 3, 2};
+        MSphere.initMesh(this, &VVertexWithColorInstance);
 
         // Create the textures
         // The second parameter is the file name
@@ -732,6 +774,7 @@ protected:
         PMesh.create();
         POverlay.create();
         PVertexWithColors.create();
+        PInstanceRendering.create();
 
         // Here you define the data set
         DSFloorGrid.init(this, &DSLMesh, {
@@ -759,6 +802,10 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
 
+        DSSphere.init(this, &DSLVertexWithColors, {
+                {0, UNIFORM, sizeof(UniformBlock), nullptr}
+        });
+
         for (auto &mInfo: MV) {
             mInfo.dsModel.init(this, &DSLMesh, {
                     {0, UNIFORM, sizeof(UniformBlock), nullptr},
@@ -774,6 +821,7 @@ protected:
         PMesh.cleanup();
         POverlay.cleanup();
         PVertexWithColors.cleanup();
+        PInstanceRendering.cleanup();
 
         // Cleanup datasets
         DSFloorGrid.cleanup();
@@ -800,6 +848,7 @@ protected:
         MOverlay.cleanup();
         MPolikeaBuilding.cleanup();
         MBuilding.cleanup();
+        MSphere.cleanup();
         for (auto &mInfo: MV)
             mInfo.model.cleanup();
 
@@ -808,11 +857,13 @@ protected:
         DSLGubo.cleanup();
         DSLOverlay.cleanup();
         DSLVertexWithColors.cleanup();
+        DSLSphere.cleanup();
 
         // Destroys the pipelines
         PMesh.destroy();
         POverlay.destroy();
         PVertexWithColors.destroy();
+        PInstanceRendering.destroy();
     }
 
     // Here it is the creation of the command buffer:
@@ -854,11 +905,9 @@ protected:
         POverlay.bind(commandBuffer);
         MOverlay.bind(commandBuffer);
         DSOverlayMoveOject.bind(commandBuffer, POverlay, 0, currentImage);
-        vkCmdDrawIndexed(commandBuffer,
-                         static_cast<uint32_t>(MOverlay.indices.size()), 1, 0, 0, 0);
+        vkCmdDrawIndexed(commandBuffer,static_cast<uint32_t>(MOverlay.indices.size()), 1, 0, 0, 0);
 
         PVertexWithColors.bind(commandBuffer);
-        // TODO check this DSGubo bind
         DSGubo.bind(commandBuffer, PVertexWithColors, 0, currentImage);
         DSPolikeaBuilding.bind(commandBuffer, PVertexWithColors, 1, currentImage);
         MPolikeaBuilding.bind(commandBuffer);
@@ -867,6 +916,12 @@ protected:
         DSBuilding.bind(commandBuffer, PVertexWithColors, 1, currentImage);
         MBuilding.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
+
+        PInstanceRendering.bind(commandBuffer);
+        DSGubo.bind(commandBuffer, PInstanceRendering, 0, currentImage);
+        DSSphere.bind(commandBuffer, PInstanceRendering, 1, currentImage);
+        MSphere.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MSphere.indices.size()), 3, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
