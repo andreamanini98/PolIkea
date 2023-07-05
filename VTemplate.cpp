@@ -23,6 +23,16 @@ enum Direction {
     WEST
 };
 
+enum DoorState {
+    OPEN,
+    CLOSED
+};
+
+enum DoorOpeningDirection {
+    CLOCKWISE,
+    COUNTERCLOCKWISE
+};
+
 struct Door {
     float offset;
     Direction direction;
@@ -106,10 +116,11 @@ struct VertexVColor {
 
 class VertexStorage {
     uint32_t vertexCurIdx = 0;
-    std::vector<VertexVColor>& vPos;
-    std::vector<uint32_t>& vIdx;
+    std::vector<VertexVColor> &vPos;
+    std::vector<uint32_t> &vIdx;
 public:
-    VertexStorage(std::vector<VertexVColor>& vPos, std::vector<uint32_t>& vIdx) : vPos(vPos), vIdx(vIdx), vertexCurIdx(vPos.size()) {
+    VertexStorage(std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx) : vPos(vPos), vIdx(vIdx),
+                                                                                  vertexCurIdx(vPos.size()) {
 
     }
 
@@ -128,7 +139,7 @@ public:
 
         //printf("%d %d %d %d\n", i0, i1, i2, i3);
 
-        if(vecDir > 0) {
+        if (vecDir > 0) {
             addIndex(i0, i1, i2);
             addIndex(i2, i3, i0);
         } else {
@@ -138,7 +149,9 @@ public:
     }
 
     void addIndex(uint32_t v0, uint32_t v1, uint32_t v2) {
-        vIdx.push_back(v0); vIdx.push_back(v1); vIdx.push_back(v2);
+        vIdx.push_back(v0);
+        vIdx.push_back(v1);
+        vIdx.push_back(v2);
     }
 };
 
@@ -203,12 +216,13 @@ inline std::vector<Room> generateFloorplan(float dimension) {
 #define ROOM_CEILING_HEIGHT 1.0f
 #define DOOR_HEIGHT 0.5f
 
-inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx) {
+inline void
+floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx) {
     VertexStorage storage(vPos, vIdx);
     uint32_t index = 0;
     int test = 0;
     for (auto &room: rooms) {
-        auto color = glm::vec3((test %3) == 0, (test%3) == 1, (test%3) == 2);
+        auto color = glm::vec3((test % 3) == 0, (test % 3) == 1, (test % 3) == 2);
 
         storage.drawRect(
             glm::vec3(room.startX,              0, room.startY),
@@ -237,26 +251,26 @@ inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<Ve
         bool hasDoorWest = false;
         float offsetWest;
 
-        for(auto& door : room.doors) {
-            if(door.direction == NORTH) {
+        for (auto &door: room.doors) {
+            if (door.direction == NORTH) {
                 hasDoorNorth = true;
                 offsetNorth = door.offset;
             }
-            if(door.direction == SOUTH) {
+            if (door.direction == SOUTH) {
                 hasDoorSouth = true;
                 offsetSouth = door.offset;
             }
-            if(door.direction == EAST){
+            if (door.direction == EAST) {
                 hasDoorEast = true;
                 offsetEast = door.offset;
             }
-            if(door.direction == WEST) {
+            if (door.direction == WEST) {
                 hasDoorWest = true;
                 offsetWest = door.offset;
             }
         }
 
-        if(hasDoorSouth) {
+        if (hasDoorSouth) {
             storage.drawRect(
                     glm::vec3(room.startX                           , 0                  , room.startY),
                     glm::vec3(room.startX + offsetSouth - DOOR_HWIDTH, 0                  , room.startY),
@@ -294,7 +308,7 @@ inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<Ve
             );
         }
 
-        if(hasDoorNorth) {
+        if (hasDoorNorth) {
             storage.drawRect(
                     glm::vec3(room.startX                           , 0                  , room.startY + room.depth),
                     glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, 0                  , room.startY + room.depth),
@@ -332,7 +346,7 @@ inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<Ve
             );
         }
 
-        if(hasDoorWest) {
+        if (hasDoorWest) {
             storage.drawRect(
                     glm::vec3(room.startX, 0                  , room.startY),
                     glm::vec3(room.startX, 0                  , room.startY + offsetWest - DOOR_HWIDTH),
@@ -370,7 +384,7 @@ inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<Ve
             );
         }
 
-        if(hasDoorEast) {
+        if (hasDoorEast) {
             storage.drawRect(
                     glm::vec3(room.startX + room.width, 0                  , room.startY),
                     glm::vec3(room.startX + room.width, 0                  , room.startY + offsetEast - DOOR_HWIDTH),
@@ -519,6 +533,14 @@ protected:
             glm::vec3(0.0f, 0.625f, -2.5f)
     };
 
+    // Doors parameters
+    glm::vec3 doorPos = glm::vec3(1.0f, 0.0f, 1.0f);
+    float doorRot = 0.0f;
+    const float doorSpeed = glm::radians(90.0f);
+    const float doorRange = glm::radians(90.0f);
+    DoorState doorState = CLOSED;
+    DoorOpeningDirection doorOpeningDirection = COUNTERCLOCKWISE;
+
     glm::vec3 CamPos = glm::vec3(2.0, 0.7, 3.45706);;
     float CamAlpha = 0.0f;
     float CamBeta = 0.0f;
@@ -638,8 +660,8 @@ protected:
                               });
 
         VVertexWithColorInstance.init(this, {
-                {0, sizeof(VertexVColor), VK_VERTEX_INPUT_RATE_VERTEX},
-                {1, sizeof(ModelInstance),    VK_VERTEX_INPUT_RATE_INSTANCE}
+                {0, sizeof(VertexVColor),  VK_VERTEX_INPUT_RATE_VERTEX},
+                {1, sizeof(ModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
         }, {
                                               {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexVColor, pos),
                                                       sizeof(glm::vec3), POSITION},
@@ -666,8 +688,7 @@ protected:
                                {&DSLGubo, &DSLVertexWithColors});
         //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PInstanceRendering.init(this, &VVertexWithColorInstance, "shaders/VColorVertInstance.spv", "shaders/VColorFragInstance.spv",
-                                {&DSLGubo, &DSLSphere});
+        PInstanceRendering.init(this, &VVertexWithColorInstance, "shaders/VColorVertInstance.spv", "shaders/VColorFragInstance.spv",{&DSLGubo, &DSLSphere});
         PInstanceRendering.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
 
@@ -721,7 +742,8 @@ protected:
         // Init local variables
     }
 
-    inline void loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMesh, std::vector<ModelInfo> *MV) {
+    inline void
+    loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMesh, std::vector<ModelInfo> *MV) {
         int i = 0;
         int polikeaBuildingOffsetsIndex = 0;
         bool loadingInPolikeaBuilding = path.find("furniture") != std::string::npos;
@@ -916,7 +938,7 @@ protected:
         POverlay.bind(commandBuffer);
         MOverlay.bind(commandBuffer);
         DSOverlayMoveOject.bind(commandBuffer, POverlay, 0, currentImage);
-        vkCmdDrawIndexed(commandBuffer,static_cast<uint32_t>(MOverlay.indices.size()), 1, 0, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MOverlay.indices.size()), 1, 0, 0, 0);
 
         PVertexWithColors.bind(commandBuffer);
         DSGubo.bind(commandBuffer, PVertexWithColors, 0, currentImage);
@@ -950,11 +972,14 @@ protected:
 
         static bool debounce = false;
         static int curDebounce = 0;
+        static bool doorDebounce = false;
+        static int curDoorDebounce = 0;
 
         float deltaT;
         auto m = glm::vec3(0.0f), r = glm::vec3(0.0f);
         bool fire = false;
-        getSixAxis(deltaT, m, r, fire);
+        static bool openDoor = false;
+        getSixAxis(deltaT, m, r, fire, openDoor);
 
         CamAlpha = CamAlpha - ROT_SPEED * deltaT * r.y;
         CamBeta = CamBeta - ROT_SPEED * deltaT * r.x;
@@ -1001,6 +1026,30 @@ protected:
             }
 
             MV[MoveObjIndex].modelRot = CamAlpha;
+        }
+
+        if (openDoor && doorState == CLOSED) {
+            if (doorOpeningDirection == COUNTERCLOCKWISE) {
+                doorRot += doorSpeed * deltaT;
+                if (doorRot >= doorRange)
+                    doorState = OPEN;
+            }
+            if (doorOpeningDirection == CLOCKWISE) {
+                doorRot -= doorSpeed * deltaT;
+                if (doorRot <= doorRange - glm::radians(180.0f))
+                    doorState = OPEN;
+            }
+        } else if (!openDoor && doorState == OPEN) {
+            if (doorOpeningDirection == COUNTERCLOCKWISE) {
+                doorRot -= doorSpeed * deltaT;
+                if (doorRot <= 0.0f)
+                    doorState = CLOSED;
+            }
+            if (doorOpeningDirection == CLOCKWISE) {
+                doorRot += doorSpeed * deltaT;
+                if (doorRot >= 0.0f)
+                    doorState = CLOSED;
+            }
         }
 
         float threshold = 2.0f;
@@ -1110,7 +1159,7 @@ protected:
         DSFloorGrid.map(currentImage, &uboGrid, sizeof(uboGrid), 0);
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
-        World = MakeWorldMatrix(glm::vec3(), 0.0f, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
+        World = MakeWorldMatrix(doorPos, doorRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
         uboDoor.amb = 0.05f;
         uboDoor.gamma = 180.0f;
         uboDoor.sColor = glm::vec3(1.0f);
