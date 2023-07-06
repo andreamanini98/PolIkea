@@ -40,7 +40,10 @@ namespace std {
 
 enum DoorState {
     OPEN,
-    CLOSED
+    CLOSED,
+    OPENING,
+    CLOSING,
+    WAITING_OPEN
 };
 
 enum DoorOpeningDirection {
@@ -60,6 +63,7 @@ struct OpenableDoor {
     float doorSpeed;
     float doorRange;
     DoorState doorState;
+    float time;
     DoorOpeningDirection doorOpeningDirection;
 };
 
@@ -100,10 +104,6 @@ struct UniformBlock {
     alignas(16) glm::mat4 nMat;
 };
 
-struct DoorInstance {
-    alignas(4) float rot;
-};
-
 struct UniformBlockDoors {
     alignas(4) float amb;
     alignas(4) float gamma;
@@ -111,7 +111,7 @@ struct UniformBlockDoors {
     alignas(16) glm::mat4 mvpMat;
     alignas(16) glm::mat4 mMat;
     alignas(16) glm::mat4 nMat;
-    DoorInstance door[N_ROOMS - 1];
+    alignas(16) glm::vec4 door[N_ROOMS - 1];
 };
 
 struct SpotLight {
@@ -200,7 +200,6 @@ public:
         }
     }
 
-    std::unordered_set<glm::vec3> doorIndices;
     void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color, float openingOffset, Direction doordirection) {
         glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
 
@@ -220,16 +219,15 @@ public:
 
         printf("%f %f %f\n", openingV0.x, openingV0.y, openingV0.z);
 
-        if(doorIndices.find(openingV0) == doorIndices.end()) {
-            doorIndices.insert(openingV0);
-            //TODO maybe flip 0.0f : glm::radians(90.0f), in initial door
+        if(/*doorIndices.find(openingV0) == doorIndices.end()*/ doordirection == NORTH || doordirection == EAST ) {
+            //doorIndices.insert(openingV0);
             float rotType;
             if (doordirection == NORTH || doordirection == SOUTH) {
-                rotType = glm::radians(90.0f);
-            } else {
                 rotType = glm::radians(0.0f);
+            } else {
+                rotType = glm::radians(90.0f);
             }
-            openableDoors.push_back(OpenableDoor{openingV0, rotType, 0.0f, glm::radians(90.0f), glm::radians(90.0f), CLOSED, COUNTERCLOCKWISE });
+            openableDoors.push_back(OpenableDoor{openingV0, rotType, 0.0f, glm::radians(90.0f), glm::radians(90.0f), CLOSED, CLOCKWISE });
         }
     }
 
@@ -1023,29 +1021,36 @@ protected:
             MV[MoveObjIndex].modelRot = CamAlpha;
         }
 
-        //TODO remember to uncomment this
         for(auto& Door: doors) {
             if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
-                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
-                    Door.doorRot += Door.doorSpeed * deltaT;
-                    if (Door.doorRot >= Door.doorRange)
-                        Door.doorState = OPEN;
+                Door.doorState = OPENING;
+            }
+
+            if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == OPEN) {
+                Door.doorState = CLOSING;
+            }
+
+            if(Door.doorState == OPENING) {
+                Door.doorRot -= Door.doorSpeed * deltaT;
+                if (Door.doorRot <= -glm::radians(90.0f)) {
+                    Door.doorState = WAITING_OPEN;
+                    Door.doorRot = -glm::radians(90.0f);
                 }
-                if (Door.doorOpeningDirection == CLOCKWISE) {
-                    Door.doorRot -= Door.doorSpeed * deltaT;
-                    if (Door.doorRot <= Door.doorRange - glm::radians(180.0f))
-                        Door.doorState = OPEN;
+            }
+
+            if(Door.doorState == WAITING_OPEN) {
+                Door.time += deltaT;
+                if(Door.time > 5) {
+                    Door.time = 0.0f;
+                    Door.doorState = OPEN;
                 }
-            } else if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
-                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
-                    Door.doorRot -= Door.doorSpeed * deltaT;
-                    if (Door.doorRot <= 0.0f)
-                        Door.doorState = CLOSED;
-                }
-                if (Door.doorOpeningDirection == CLOCKWISE) {
-                    Door.doorRot += Door.doorSpeed * deltaT;
-                    if (Door.doorRot >= 0.0f)
-                        Door.doorState = CLOSED;
+            }
+
+            if(Door.doorState == CLOSING) {
+                Door.doorRot += Door.doorSpeed * deltaT;
+                if (Door.doorRot >= 0.0f) {
+                    Door.doorState = CLOSED;
+                    Door.doorRot = 0.0f;
                 }
             }
         }
@@ -1166,12 +1171,8 @@ protected:
         uboDoor.mvpMat = ViewPrj * World;
         uboDoor.mMat = World;
         uboDoor.nMat = glm::inverse(glm::transpose(World));
-        if(doors.size() > N_ROOMS-1) {
-            printf("DOORS %zu\n", doors.size());
-        }
         for(int i = 0; i < N_ROOMS - 1; i++) {
-            assert(i < N_ROOMS - 1);
-            uboDoor.door[i].rot = doors[i].doorRot;
+            uboDoor.door[i] = glm::vec4(doors[i].doorRot);
         }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
 
