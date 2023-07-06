@@ -50,10 +50,12 @@ enum DoorOpeningDirection {
 
 struct DoorModelInstance {
     glm::vec3 pos;
+    float baseRot;
 };
 
 struct OpenableDoor {
     glm::vec3 doorPos;
+    float baseRot;
     float doorRot;
     float doorSpeed;
     float doorRange;
@@ -98,6 +100,10 @@ struct UniformBlock {
     alignas(16) glm::mat4 nMat;
 };
 
+struct DoorInstance {
+    alignas(4) float rot;
+};
+
 struct UniformBlockDoors {
     alignas(4) float amb;
     alignas(4) float gamma;
@@ -105,7 +111,7 @@ struct UniformBlockDoors {
     alignas(16) glm::mat4 mvpMat;
     alignas(16) glm::mat4 mMat;
     alignas(16) glm::mat4 nMat;
-    alignas(4) float rot[N_ROOMS - 1];
+    DoorInstance door[N_ROOMS - 1];
 };
 
 struct SpotLight {
@@ -216,18 +222,14 @@ public:
 
         if(doorIndices.find(openingV0) == doorIndices.end()) {
             doorIndices.insert(openingV0);
-            //TODO maybe flip 0.0f : glm::radians(90.0f), in initial rot
+            //TODO maybe flip 0.0f : glm::radians(90.0f), in initial door
             float rotType;
-            if (doordirection == NORTH) {
-                rotType = 1;
-            } else if (doordirection == EAST) {
-                rotType = 2;
-            } else if (doordirection == SOUTH) {
-                rotType = 3;
+            if (doordirection == NORTH || doordirection == SOUTH) {
+                rotType = glm::radians(90.0f);
             } else {
-                rotType = 4;
+                rotType = glm::radians(0.0f);
             }
-            openableDoors.push_back(OpenableDoor{openingV0, rotType, glm::radians(90.0f), glm::radians(90.0f), CLOSED, COUNTERCLOCKWISE });
+            openableDoors.push_back(OpenableDoor{openingV0, rotType, 0.0f, glm::radians(90.0f), glm::radians(90.0f), CLOSED, COUNTERCLOCKWISE });
         }
     }
 
@@ -489,7 +491,7 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLGubo, DSLOverlay, DSLVertexWithColors;
+    DescriptorSetLayout DSLMesh, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors;
 
     // Vertex formats
     VertexDescriptor VMesh, VOverlay, VVertexWithColor, VMeshInstanced;
@@ -563,6 +565,16 @@ protected:
     void localInit() {
         // Descriptor Layouts [what will be passed to the shaders]
         DSLMesh.init(this, {
+                // This array contains the bindings:
+                // first  element : the binding number
+                // second element : the type of element (buffer or texture)
+                //                  using the corresponding Vulkan constant
+                // third  element : the pipeline stage where it will be used
+                //                  using the corresponding Vulkan constant
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
+                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
+        });
+        DSLDoor.init(this, {
                 // This array contains the bindings:
                 // first  element : the binding number
                 // second element : the type of element (buffer or texture)
@@ -653,7 +665,9 @@ protected:
                 {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
                         sizeof(glm::vec2), UV},
               {1, 3, VK_FORMAT_R32G32B32_SFLOAT, offsetof(DoorModelInstance, pos),
-                      sizeof(glm::vec3), OTHER}
+                      sizeof(glm::vec3), OTHER},
+                {1, 4, VK_FORMAT_R32_SFLOAT, offsetof(DoorModelInstance, baseRot),
+                      sizeof(float), OTHER}
         });
 
         // Pipelines [Shader couples]
@@ -671,7 +685,7 @@ protected:
                                {&DSLGubo, &DSLVertexWithColors});
         //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderVertInstanced.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLMesh});
+        PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderVertInstanced.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLDoor});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
 
@@ -705,7 +719,7 @@ protected:
         MDoor.instanceBufferPresent = true;
         MDoor.instances.reserve(doors.size());
         for(auto &door : doors) {
-            MDoor.instances.push_back({door.doorPos});
+            MDoor.instances.push_back({door.doorPos, door.baseRot });
         }
         MDoor.init(this, &VMeshInstanced, "models/door_009_Mesh.112.mgcg", MGCG);
 
@@ -796,7 +810,7 @@ protected:
         DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
-        DSDoor.init(this, &DSLMesh, {
+        DSDoor.init(this, &DSLDoor, {
                 {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
                 {1, TEXTURE, 0,                    &T2}
         });
@@ -858,6 +872,7 @@ protected:
         DSLGubo.cleanup();
         DSLOverlay.cleanup();
         DSLVertexWithColors.cleanup();
+        DSLDoor.cleanup();
 
         // Destroys the pipelines
         PMesh.destroy();
@@ -1149,7 +1164,8 @@ protected:
         uboDoor.nMat = glm::inverse(glm::transpose(World));
         int i = 0;
         for(auto &door: doors) {
-            uboDoor.rot[i] = door.doorRot;
+            assert(i < N_ROOMS - 1);
+            uboDoor.door[i].rot = door.doorRot;
             i++;
         }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);

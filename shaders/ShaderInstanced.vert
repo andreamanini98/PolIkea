@@ -3,6 +3,10 @@
 
 #define N_ROOMS 6
 
+struct DoorInstance {
+	float rot;
+};
+
 layout(set = 1, binding = 0) uniform UniformBufferObject {
 	float amb;
 	float gamma;
@@ -10,13 +14,14 @@ layout(set = 1, binding = 0) uniform UniformBufferObject {
 	mat4 mvpMat;
 	mat4 mMat;
 	mat4 nMat;
-	float rot[N_ROOMS-1];
+	DoorInstance door[N_ROOMS-1];
 } ubo;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNorm;
 layout(location = 2) in vec2 inUV;
 layout(location = 3) in vec3 instancePos;
+layout(location = 4) in float instanceRot;
 
 layout(location = 0) out vec3 fragPos;
 layout(location = 1) out vec3 fragNorm;
@@ -36,17 +41,7 @@ mat4 rotationMatrix(vec3 axis, float angle)
 }
 
 void main() {
-		float rot = ubo.rot[gl_InstanceIndex];
-		mat4 rotation;
-		if (rot == 3) {
-			rotation = rotationMatrix(vec3(0.0, 1.0, 0.0), 1.5708);
-		} else if (rot == 4) {
-			rotation = rotationMatrix(vec3(0.0, 1.0, 0.0), 3.14159);
-		} else if (rot == 1) {
-			rotation = rotationMatrix(vec3(0.0, 1.0, 0.0), 4.71239);
-		} else {
-			rotation = rotationMatrix(vec3(0.0, 1.0, 0.0), 0.0);
-		}
+		mat4 rotation = rotationMatrix(vec3(0.0, 1.0, 0.0), instanceRot + ubo.door[gl_InstanceIndex].rot);
 
 		vec3 rotatedPosition = (rotation * vec4(inPosition, 1.0)).xyz;
 		vec3 rotatedNormal = (rotation * vec4(inNorm, 0.0)).xyz;
