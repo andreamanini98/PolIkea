@@ -195,7 +195,7 @@ public:
     }
 
     std::unordered_set<glm::vec3> doorIndices;
-    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color, float openingOffset) {
+    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color, float openingOffset, Direction doordirection) {
         glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
 
         glm::vec3 openingDir = glm::normalize(v1 - v0); //TODO
@@ -217,7 +217,17 @@ public:
         if(doorIndices.find(openingV0) == doorIndices.end()) {
             doorIndices.insert(openingV0);
             //TODO maybe flip 0.0f : glm::radians(90.0f), in initial rot
-            openableDoors.push_back(OpenableDoor{ openingV0, norm == glm::vec3(1.0f, 0.0f, 0.0f) ? glm::radians(90.0f) : 0.0f, glm::radians(90.0f), glm::radians(90.0f), CLOSED, COUNTERCLOCKWISE });
+            float rotType;
+            if (doordirection == NORTH) {
+                rotType = 1;
+            } else if (doordirection == EAST) {
+                rotType = 2;
+            } else if (doordirection == SOUTH) {
+                rotType = 3;
+            } else {
+                rotType = 4;
+            }
+            openableDoors.push_back(OpenableDoor{openingV0, rotType, glm::radians(90.0f), glm::radians(90.0f), CLOSED, COUNTERCLOCKWISE });
         }
     }
 
@@ -347,7 +357,7 @@ inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<Ve
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
                     1,
                     color,
-                    offsetSouth
+                    offsetSouth, SOUTH
             );
         } else {
             storage.drawRect(
@@ -368,7 +378,7 @@ inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<Ve
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     -1,
                     color,
-                    offsetNorth
+                    offsetNorth, NORTH
             );
         } else {
             storage.drawRect(
@@ -389,7 +399,7 @@ inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<Ve
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
                     -1,
                     color,
-                    offsetWest
+                    offsetWest, WEST
             );
         } else {
             storage.drawRect(
@@ -410,7 +420,7 @@ inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<Ve
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
                     1,
                     color,
-                    offsetEast
+                    offsetEast, EAST
             );
         } else {
             storage.drawRect(
@@ -994,31 +1004,32 @@ protected:
             MV[MoveObjIndex].modelRot = CamAlpha;
         }
 
-        for(auto& Door: doors) {
-            if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
-                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
-                    Door.doorRot += Door.doorSpeed * deltaT;
-                    if (Door.doorRot >= Door.doorRange)
-                        Door.doorState = OPEN;
-                }
-                if (Door.doorOpeningDirection == CLOCKWISE) {
-                    Door.doorRot -= Door.doorSpeed * deltaT;
-                    if (Door.doorRot <= Door.doorRange - glm::radians(180.0f))
-                        Door.doorState = OPEN;
-                }
-            } else if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
-                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
-                    Door.doorRot -= Door.doorSpeed * deltaT;
-                    if (Door.doorRot <= 0.0f)
-                        Door.doorState = CLOSED;
-                }
-                if (Door.doorOpeningDirection == CLOCKWISE) {
-                    Door.doorRot += Door.doorSpeed * deltaT;
-                    if (Door.doorRot >= 0.0f)
-                        Door.doorState = CLOSED;
-                }
-            }
-        }
+        //TODO remember to uncomment this
+//        for(auto& Door: doors) {
+//            if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
+//                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
+//                    Door.doorRot += Door.doorSpeed * deltaT;
+//                    if (Door.doorRot >= Door.doorRange)
+//                        Door.doorState = OPEN;
+//                }
+//                if (Door.doorOpeningDirection == CLOCKWISE) {
+//                    Door.doorRot -= Door.doorSpeed * deltaT;
+//                    if (Door.doorRot <= Door.doorRange - glm::radians(180.0f))
+//                        Door.doorState = OPEN;
+//                }
+//            } else if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
+//                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
+//                    Door.doorRot -= Door.doorSpeed * deltaT;
+//                    if (Door.doorRot <= 0.0f)
+//                        Door.doorState = CLOSED;
+//                }
+//                if (Door.doorOpeningDirection == CLOCKWISE) {
+//                    Door.doorRot += Door.doorSpeed * deltaT;
+//                    if (Door.doorRot >= 0.0f)
+//                        Door.doorState = CLOSED;
+//                }
+//            }
+//        }
 
         float threshold = 2.0f;
         if (fire) {
