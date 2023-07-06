@@ -251,17 +251,19 @@ inline std::vector<Room> generateFloorplan(float dimension) {
     float currentY = 0;
 
     float minWidth = MIN_DIMENSION;
-    float minHeight = MIN_DIMENSION;
+    float minDepth = MIN_DIMENSION;
 
     std::uniform_int_distribution<int> boolDistr(0, 1);
 
+    uint32_t n_doors = 0;
+
     Door prevDoor{};
     for (int i = 0; i < N_ROOMS; i++) {
-        std::uniform_real_distribution<float> distribution_w(minWidth, dimension);
-        std::uniform_real_distribution<float> distribution_h(minHeight, dimension);
+        std::uniform_real_distribution<float> distribution_w(minWidth + DOOR_HWIDTH, dimension);
+        std::uniform_real_distribution<float> distribution_h(minDepth + DOOR_HWIDTH, dimension);
         // Generate a random room
         float roomWidth = distribution_w(gen);
-        float roomHeight = distribution_h(gen);
+        float roomDepth = distribution_h(gen);
 
         prevDoor.direction = prevDoor.direction == Direction::NORTH ? Direction::SOUTH : Direction::WEST;
         auto &room = rooms.emplace_back(
@@ -269,38 +271,40 @@ inline std::vector<Room> generateFloorplan(float dimension) {
                         currentX,
                         currentY,
                         roomWidth,
-                        roomHeight,
+                        roomDepth,
                         i != 0 ? std::vector<Door>({prevDoor}) : std::vector<Door>()
                 }
         );
 
         if (static_cast<bool>(boolDistr(gen))) {
-            std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomHeight - DOOR_HWIDTH);
+            std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomDepth - DOOR_HWIDTH);
 
             currentX += roomWidth;
             minWidth = MIN_DIMENSION;
-            minHeight = distribution_door(gen);
-            prevDoor = Door{minHeight, Direction::EAST};
+            minDepth = distribution_door(gen);
+            prevDoor = Door{minDepth, Direction::EAST};
         } else {
             std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomWidth - DOOR_HWIDTH);
 
-            currentY += roomHeight;
+            currentY += roomDepth;
             minWidth = distribution_door(gen);
-            minHeight = MIN_DIMENSION;
+            minDepth = MIN_DIMENSION;
             prevDoor = Door{minWidth, Direction::NORTH};
         }
 
         if (i != N_ROOMS - 1) {
             room.doors.push_back(prevDoor);
+            n_doors++;
         }
     }
+
+    printf("N DOORS at generateFloorplan %d\n", n_doors);
 
     return std::move(rooms);
 }
 
 inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx, std::vector<OpenableDoor> &openableDoors) {
     VertexStorage storage(vPos, vIdx, openableDoors);
-    uint32_t index = 0;
     int test = 0;
     for (auto &room: rooms) {
         auto color = glm::vec3((test % 3) == 0, (test % 3) == 1, (test % 3) == 2);
@@ -936,7 +940,7 @@ protected:
         DSGubo.bind(commandBuffer, PMeshInstanced, 0, currentImage);
         DSDoor.bind(commandBuffer, PMeshInstanced, 1, currentImage);
         MDoor.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), doors.size(), 0, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
@@ -1020,31 +1024,31 @@ protected:
         }
 
         //TODO remember to uncomment this
-//        for(auto& Door: doors) {
-//            if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
-//                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
-//                    Door.doorRot += Door.doorSpeed * deltaT;
-//                    if (Door.doorRot >= Door.doorRange)
-//                        Door.doorState = OPEN;
-//                }
-//                if (Door.doorOpeningDirection == CLOCKWISE) {
-//                    Door.doorRot -= Door.doorSpeed * deltaT;
-//                    if (Door.doorRot <= Door.doorRange - glm::radians(180.0f))
-//                        Door.doorState = OPEN;
-//                }
-//            } else if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
-//                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
-//                    Door.doorRot -= Door.doorSpeed * deltaT;
-//                    if (Door.doorRot <= 0.0f)
-//                        Door.doorState = CLOSED;
-//                }
-//                if (Door.doorOpeningDirection == CLOCKWISE) {
-//                    Door.doorRot += Door.doorSpeed * deltaT;
-//                    if (Door.doorRot >= 0.0f)
-//                        Door.doorState = CLOSED;
-//                }
-//            }
-//        }
+        for(auto& Door: doors) {
+            if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
+                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
+                    Door.doorRot += Door.doorSpeed * deltaT;
+                    if (Door.doorRot >= Door.doorRange)
+                        Door.doorState = OPEN;
+                }
+                if (Door.doorOpeningDirection == CLOCKWISE) {
+                    Door.doorRot -= Door.doorSpeed * deltaT;
+                    if (Door.doorRot <= Door.doorRange - glm::radians(180.0f))
+                        Door.doorState = OPEN;
+                }
+            } else if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
+                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
+                    Door.doorRot -= Door.doorSpeed * deltaT;
+                    if (Door.doorRot <= 0.0f)
+                        Door.doorState = CLOSED;
+                }
+                if (Door.doorOpeningDirection == CLOCKWISE) {
+                    Door.doorRot += Door.doorSpeed * deltaT;
+                    if (Door.doorRot >= 0.0f)
+                        Door.doorState = CLOSED;
+                }
+            }
+        }
 
         float threshold = 2.0f;
         if (fire) {
@@ -1162,11 +1166,12 @@ protected:
         uboDoor.mvpMat = ViewPrj * World;
         uboDoor.mMat = World;
         uboDoor.nMat = glm::inverse(glm::transpose(World));
-        int i = 0;
-        for(auto &door: doors) {
+        if(doors.size() > N_ROOMS-1) {
+            printf("DOORS %zu\n", doors.size());
+        }
+        for(int i = 0; i < N_ROOMS - 1; i++) {
             assert(i < N_ROOMS - 1);
-            uboDoor.door[i].rot = door.doorRot;
-            i++;
+            uboDoor.door[i].rot = doors[i].doorRot;
         }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
 
