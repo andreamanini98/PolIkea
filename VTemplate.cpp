@@ -11,6 +11,10 @@
 #define N_POINTLIGHTS 50
 #define MAX_OBJECTS_IN_POLIKEA 15 // Do not exceed 15 since the model is pre-generated using Blender
 
+#define FRONTOFFSET 10.0f
+#define SIDEOFFSET 20.0f
+#define BACKOFFSET 30.0f
+
 namespace fs = std::filesystem;
 
 namespace std {
@@ -455,6 +459,50 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
     return startingRoomCenter;
 }
 
+
+inline void
+insertRectVertices(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 norm, std::vector<Vertex> *vPos) {
+    vPos->push_back({v0, norm, {0.0f, 1.0f}});
+    vPos->push_back({v1, norm, {1.0f, 1.0f}});
+    vPos->push_back({v2, norm, {1.0f, 0.0f}});
+    vPos->push_back({v3, norm, {0.0f, 0.0f}});
+}
+
+inline void
+initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector<uint32_t> *vIdxGround,
+                        std::vector<Vertex> *vPosFence, std::vector<uint32_t> *vIdxFence,
+                        glm::vec3 polikeaPos, float frontOffset, float sideOffset, float backOffset) {
+    // Vertices of the ground as seen from a top view
+    glm::vec3 bottomLeft = polikeaPos + glm::vec3(-sideOffset, 0.0f, frontOffset);
+    glm::vec3 topLeft = polikeaPos + glm::vec3(-sideOffset, 0.0f, -backOffset);
+    glm::vec3 topRight = polikeaPos + glm::vec3(sideOffset, 0.0f, -backOffset);
+    glm::vec3 bottomRight = polikeaPos + glm::vec3(sideOffset, 0.0f, frontOffset);
+    glm::vec3 h = glm::vec3(0.0f, 15.0f, 0.0f);
+
+    insertRectVertices(bottomLeft, topLeft, topRight, bottomRight, {0.0f, 1.0f, 0.0f}, vPosGround);
+    vIdxGround->push_back(0);
+    vIdxGround->push_back(1);
+    vIdxGround->push_back(2);
+    vIdxGround->push_back(0);
+    vIdxGround->push_back(2);
+    vIdxGround->push_back(3);
+
+    insertRectVertices(bottomLeft, topLeft, topLeft + h, bottomLeft + h, {1.0f, 0.0f, 0.0f}, vPosFence);
+    insertRectVertices(topLeft, topRight, topRight + h, topLeft + h, {0.0f, 0.0f, 1.0f}, vPosFence);
+    insertRectVertices(topRight, bottomRight, bottomRight + h, topRight + h, {1.0f, 0.0f, 0.0f}, vPosFence);
+    insertRectVertices(bottomRight, bottomLeft, bottomLeft + h, bottomRight + h, {0.0f, 0.0f, 1.0f}, vPosFence);
+
+    for (int i = 0; i < 4; i++) {
+        vIdxFence->push_back(i * 4 + 0);
+        vIdxFence->push_back(i * 4 + 1);
+        vIdxFence->push_back(i * 4 + 2);
+        vIdxFence->push_back(i * 4 + 0);
+        vIdxFence->push_back(i * 4 + 2);
+        vIdxFence->push_back(i * 4 + 3);
+    }
+}
+
+
 // Struct used to store data related to a model
 struct ModelInfo {
     Model<Vertex> model;
@@ -519,17 +567,17 @@ protected:
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
     // Models
-    Model<Vertex> MFloorGrid;
+    Model<Vertex> MPolikeaExternFloor, MFence;
     Model<VertexOverlay> MOverlay;
     Model<VertexVColor> MPolikeaBuilding;
     Model<VertexVColor> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSFloorGrid, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
+    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
     // Textures
-    Texture T1, T2, TOverlayMoveObject;
+    Texture T1, T2, T3, TOverlayMoveObject;
     // C++ storage for uniform variables
-    UniformBlock uboGrid, uboPolikea, uboBuilding;
+    UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
 
@@ -537,11 +585,12 @@ protected:
     // A vector containing one element for each model loaded where we want to keep track of its information
     std::vector<ModelInfo> MV;
 
-    glm::vec3 polikeaBuildingPosition = glm::vec3(5.0f, 0.0f, -15.0f);
+    glm::vec3 polikeaBuildingPosition = getPolikeaBuildingPosition();
     std::vector<glm::vec3> polikeaBuildingOffsets = getPolikeaBuildingOffsets();
-    std::vector<BoundingRectangle> boundingRectangles = getBoundingRectangles(polikeaBuildingPosition);
+    std::vector<BoundingRectangle> boundingRectangles = getBoundingRectangles(polikeaBuildingPosition, FRONTOFFSET,
+                                                                              SIDEOFFSET, BACKOFFSET);
 
-    glm::vec3 CamPos = glm::vec3(2.0, 0.7, 3.45706);;
+    glm::vec3 CamPos = glm::vec3(2.0, 1.0, 3.45706);
     float CamAlpha = 0.0f;
     float CamBeta = 0.0f;
     float CamRho = 0.0f;
@@ -714,12 +763,13 @@ protected:
         loadModels("models/lights", this, &VMesh, &MV);
 
         // Creates a mesh with direct enumeration of vertices and indices
-        MFloorGrid.vertices = {{{-6, 0, -6}, {0.0, 1.0, 0.0}, {0.0f, 0.0f}},
-                               {{-6, 0, 6},  {0.0, 1.0, 0.0}, {0.0f, 1.0f}},
-                               {{6,  0, -6}, {0.0, 1.0, 0.0}, {1.0f, 0.0f}},
-                               {{6,  0, 6},  {0.0, 1.0, 0.0}, {1.0f, 1.0f}}};
-        MFloorGrid.indices = {0, 1, 2, 1, 3, 2};
-        MFloorGrid.initMesh(this, &VMesh);
+        initPolikeaSurroundings(&MPolikeaExternFloor.vertices,
+                                &MPolikeaExternFloor.indices,
+                                &MFence.vertices,
+                                &MFence.indices,
+                                getPolikeaBuildingPosition(), FRONTOFFSET, SIDEOFFSET, BACKOFFSET);
+        MPolikeaExternFloor.initMesh(this, &VMesh);
+        MFence.initMesh(this, &VMesh);
 
         MOverlay.vertices = {{{-0.7f, 0.70f}, {0.0f, 0.0f}},
                              {{-0.7f, 0.93f}, {0.0f, 1.0f}},
@@ -744,8 +794,9 @@ protected:
 
         // Create the textures
         // The second parameter is the file name
-        T1.init(this, "textures/Checker.png");
+        T1.init(this, "textures/Asphalt.jpg");
         T2.init(this, "textures/Textures_Forniture.png");
+        T3.init(this, "textures/Fence.jpg");
         TOverlayMoveObject.init(this, "textures/MoveBanner.png");
 
         // Init local variables
@@ -809,7 +860,7 @@ protected:
         PMeshInstanced.create();
 
         // Here you define the data set
-        DSFloorGrid.init(this, &DSLMesh, {
+        DSPolikeaExternFloor.init(this, &DSLMesh, {
                 // the second parameter is a pointer to the Uniform Set Layout of this set
                 // the last parameter is an array, with one element per binding of the set.
                 // first  element : the binding number
@@ -818,6 +869,10 @@ protected:
                 // fourth element : only for TEXTURES, the pointer to the corresponding texture object. For uniforms, use nullptr
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
                 {1, TEXTURE, 0,                    &T1}
+        });
+        DSFence.init(this, &DSLMesh, {
+                {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                {1, TEXTURE, 0,                    &T3}
         });
         DSGubo.init(this, &DSLGubo, {
                 {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr}
@@ -856,7 +911,8 @@ protected:
         PMeshInstanced.cleanup();
 
         // Cleanup datasets
-        DSFloorGrid.cleanup();
+        DSPolikeaExternFloor.cleanup();
+        DSFence.cleanup();
         DSGubo.cleanup();
         DSOverlayMoveOject.cleanup();
         DSPolikeaBuilding.cleanup();
@@ -875,10 +931,12 @@ protected:
         // Cleanup textures
         T1.cleanup();
         T2.cleanup();
+        T3.cleanup();
         TOverlayMoveObject.cleanup();
 
         // Cleanup models
-        MFloorGrid.cleanup();
+        MPolikeaExternFloor.cleanup();
+        MFence.cleanup();
         MOverlay.cleanup();
         MPolikeaBuilding.cleanup();
         MDoor.cleanup();
@@ -919,12 +977,16 @@ protected:
         DSGubo.bind(commandBuffer, PMesh, 0, currentImage);
 
         //--- GRID ---
-        DSFloorGrid.bind(commandBuffer, PMesh, 1, currentImage);
         // binds the model
         // For a Model object, this command binds the corresponding index and vertex buffer
         // to the command buffer passed in its parameter
-        MFloorGrid.bind(commandBuffer);
-        //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFloorGrid.indices.size()), 1, 0, 0, 0);
+        DSPolikeaExternFloor.bind(commandBuffer, PMesh, 1, currentImage);
+        MPolikeaExternFloor.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaExternFloor.indices.size()), 1, 0, 0, 0);
+
+        DSFence.bind(commandBuffer, PMesh, 1, currentImage);
+        MFence.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFence.indices.size()), 1, 0, 0, 0);
         // the second parameter is the number of indexes to be drawn. For a Model object,
         // this can be retrieved with the .indices.size() method.
 
@@ -1022,7 +1084,7 @@ protected:
             } else {
                 const glm::vec3 modelPos = glm::vec3(
                         CamPos.x,
-                        CamPos.y - 0.7f,
+                        CamPos.y - 1.0f,
                         CamPos.z - 2.0f
                 );
 
@@ -1117,7 +1179,7 @@ protected:
             CamAlpha = CamBeta = CamRho = 0.0f;
         }
         if (glfwGetKey(window, GLFW_KEY_K)) {
-            CamPos = polikeaBuildingPosition + glm::vec3(5.0f, 0.7, 5.0f);
+            CamPos = polikeaBuildingPosition + glm::vec3(5.0f, 1.0, 5.0f);
             CamAlpha = CamBeta = CamRho = 0.0f;
         }
 
@@ -1155,6 +1217,7 @@ protected:
         }
         gubo.nSpotLights = indexSpot;
         gubo.nPointLights = indexPoint;
+        DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         glm::mat4 baseTr = glm::mat4(1.0f);
@@ -1189,18 +1252,25 @@ protected:
         uboKey.visible = (OnlyMoveCam && displayKey) ? 1.0f : 0.0f;
         DSOverlayMoveOject.map(currentImage, &uboKey, sizeof(uboKey), 0);
 
-        uboGrid.amb = 0.05f;
-        uboGrid.gamma = 180.0f;
-        uboGrid.sColor = glm::vec3(1.0f);
-        uboGrid.mvpMat = ViewPrj * World;
-        uboGrid.mMat = World;
-        uboGrid.nMat = glm::inverse(glm::transpose(World));
+        uboPolikeaExternFloor.amb = 0.05f;
+        uboPolikeaExternFloor.gamma = 180.0f;
+        uboPolikeaExternFloor.sColor = glm::vec3(1.0f);
+        uboPolikeaExternFloor.mvpMat = ViewPrj * World;
+        uboPolikeaExternFloor.mMat = World;
+        uboPolikeaExternFloor.nMat = glm::inverse(glm::transpose(World));
         // the .map() method of a DataSet object, requires the current image of the swap chain as first parameter
         // the second parameter is the pointer to the C++ data structure to transfer to the GPU
         // the third parameter is its size
         // the fourth parameter is the location inside the descriptor set of this uniform block
-        DSFloorGrid.map(currentImage, &uboGrid, sizeof(uboGrid), 0);
-        DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
+        DSPolikeaExternFloor.map(currentImage, &uboPolikeaExternFloor, sizeof(uboPolikeaExternFloor), 0);
+
+        uboFence.amb = 0.05f;
+        uboFence.gamma = 180.0f;
+        uboFence.sColor = glm::vec3(1.0f);
+        uboFence.mvpMat = ViewPrj * World;
+        uboFence.mMat = World;
+        uboFence.nMat = glm::inverse(glm::transpose(World));
+        DSFence.map(currentImage, &uboFence, sizeof(uboFence), 0);
 
         World = baseTr;
         uboDoor.amb = 0.05f;
