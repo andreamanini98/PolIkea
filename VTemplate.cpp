@@ -14,9 +14,9 @@
 namespace fs = std::filesystem;
 
 namespace std {
-    template <>
+    template<>
     struct hash<glm::vec3> {
-        size_t operator()(const glm::vec3& t) const {
+        size_t operator()(const glm::vec3 &t) const {
             // Calculate the hash using the member variables
             size_t seed = 0;
             hash<float> hasher;
@@ -200,7 +200,8 @@ public:
         }
     }
 
-    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color, float openingOffset, Direction doordirection) {
+    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color,
+                             float openingOffset, Direction doordirection) {
         glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
 
         glm::vec3 openingDir = glm::normalize(v1 - v0); //TODO
@@ -219,7 +220,7 @@ public:
 
         printf("%f %f %f\n", openingV0.x, openingV0.y, openingV0.z);
 
-        if(/*doorIndices.find(openingV0) == doorIndices.end()*/ doordirection == NORTH || doordirection == EAST ) {
+        if (/*doorIndices.find(openingV0) == doorIndices.end()*/ doordirection == NORTH || doordirection == EAST) {
             //doorIndices.insert(openingV0);
             float rotType;
             if (doordirection == NORTH || doordirection == SOUTH) {
@@ -227,7 +228,9 @@ public:
             } else {
                 rotType = glm::radians(90.0f);
             }
-            openableDoors.push_back(OpenableDoor{openingV0, rotType, 0.0f, glm::radians(90.0f), glm::radians(90.0f), CLOSED, CLOCKWISE });
+            openableDoors.push_back(
+                    OpenableDoor{openingV0, rotType, 0.0f, glm::radians(90.0f), glm::radians(90.0f), CLOSED,
+                                 CLOCKWISE});
         }
     }
 
@@ -301,7 +304,9 @@ inline std::vector<Room> generateFloorplan(float dimension) {
     return std::move(rooms);
 }
 
-inline glm::vec3 floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx, std::vector<OpenableDoor> &openableDoors) {
+inline glm::vec3
+floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx,
+                      std::vector<OpenableDoor> &openableDoors) {
     VertexStorage storage(vPos, vIdx, openableDoors);
     int test = 0;
     glm::vec3 startingRoomCenter = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -668,20 +673,20 @@ protected:
                               });
 
         VMeshInstanced.init(this, {
-                {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX},
+                {0, sizeof(Vertex),            VK_VERTEX_INPUT_RATE_VERTEX},
                 {1, sizeof(DoorModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
         }, {
-                {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
-                        sizeof(glm::vec3), POSITION},
-                {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, norm),
-                        sizeof(glm::vec3), NORMAL},
-                {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
-                        sizeof(glm::vec2), UV},
-              {1, 3, VK_FORMAT_R32G32B32_SFLOAT, offsetof(DoorModelInstance, pos),
-                      sizeof(glm::vec3), OTHER},
-                {1, 4, VK_FORMAT_R32_SFLOAT, offsetof(DoorModelInstance, baseRot),
-                      sizeof(float), OTHER}
-        });
+                                    {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
+                                            sizeof(glm::vec3), POSITION},
+                                    {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, norm),
+                                            sizeof(glm::vec3), NORMAL},
+                                    {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
+                                            sizeof(glm::vec2), UV},
+                                    {1, 3, VK_FORMAT_R32G32B32_SFLOAT, offsetof(DoorModelInstance, pos),
+                                            sizeof(glm::vec3), OTHER},
+                                    {1, 4, VK_FORMAT_R32_SFLOAT,       offsetof(DoorModelInstance, baseRot),
+                                            sizeof(float),     OTHER}
+                            });
 
         // Pipelines [Shader couples]
         // The second parameter is the pointer to the vertex definition
@@ -698,7 +703,8 @@ protected:
                                {&DSLGubo, &DSLVertexWithColors});
         //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderVertInstanced.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLDoor});
+        PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderVertInstanced.spv", "shaders/ShaderFrag.spv",
+                            {&DSLGubo, &DSLDoor});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
 
@@ -731,8 +737,8 @@ protected:
 
         MDoor.instanceBufferPresent = true;
         MDoor.instances.reserve(doors.size());
-        for(auto &door : doors) {
-            MDoor.instances.push_back({door.doorPos, door.baseRot });
+        for (auto &door: doors) {
+            MDoor.instances.push_back({door.doorPos, door.baseRot});
         }
         MDoor.init(this, &VMeshInstanced, "models/door_009_Mesh.112.mgcg", MGCG);
 
@@ -825,7 +831,7 @@ protected:
         });
         DSDoor.init(this, &DSLDoor, {
                 {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
-                {1, TEXTURE, 0,                    &T2}
+                {1, TEXTURE, 0,                         &T2}
         });
 
         DSBuilding.init(this, &DSLVertexWithColors, {
@@ -1003,9 +1009,15 @@ protected:
         }
 
         if (!OnlyMoveCam) {
+            //Checks to see if an object can be bought
             if (!MV[MoveObjIndex].hasBeenBought) {
-                MV[MoveObjIndex].modelPos = startingRoomCenter;
-                MV[MoveObjIndex].hasBeenBought = true;
+                bool isObjectAllowedToMove = true;
+                for (auto &i: MV)
+                    isObjectAllowedToMove = isObjectAllowedToMove && !(i.modelPos == startingRoomCenter);
+                if (isObjectAllowedToMove) {
+                    MV[MoveObjIndex].modelPos = startingRoomCenter;
+                    MV[MoveObjIndex].hasBeenBought = true;
+                }
                 OnlyMoveCam = true;
             } else {
                 const glm::vec3 modelPos = glm::vec3(
@@ -1038,7 +1050,7 @@ protected:
             }
         }
 
-        for(auto& Door: doors) {
+        for (auto &Door: doors) {
             if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
                 Door.doorState = OPENING;
             }
@@ -1047,7 +1059,7 @@ protected:
                 Door.doorState = CLOSING;
             }
 
-            if(Door.doorState == OPENING) {
+            if (Door.doorState == OPENING) {
                 Door.doorRot -= Door.doorSpeed * deltaT;
                 if (Door.doorRot <= -glm::radians(90.0f)) {
                     Door.doorState = WAITING_OPEN;
@@ -1055,15 +1067,15 @@ protected:
                 }
             }
 
-            if(Door.doorState == WAITING_OPEN) {
+            if (Door.doorState == WAITING_OPEN) {
                 Door.time += deltaT;
-                if(Door.time > 5) {
+                if (Door.time > 5) {
                     Door.time = 0.0f;
                     Door.doorState = OPEN;
                 }
             }
 
-            if(Door.doorState == CLOSING) {
+            if (Door.doorState == CLOSING) {
                 Door.doorRot += Door.doorSpeed * deltaT;
                 if (Door.doorRot >= 0.0f) {
                     Door.doorState = CLOSED;
@@ -1100,11 +1112,11 @@ protected:
             }
         }
 
-        if(glfwGetKey(window, GLFW_KEY_H)) {
+        if (glfwGetKey(window, GLFW_KEY_H)) {
             CamPos = startingRoomCenter + glm::vec3(0.0f, 0.7, 3.0f);
             CamAlpha = CamBeta = CamRho = 0.0f;
         }
-        if(glfwGetKey(window, GLFW_KEY_K)) {
+        if (glfwGetKey(window, GLFW_KEY_K)) {
             CamPos = polikeaBuildingPosition + glm::vec3(5.0f, 0.7, 5.0f);
             CamAlpha = CamBeta = CamRho = 0.0f;
         }
@@ -1197,7 +1209,7 @@ protected:
         uboDoor.mvpMat = ViewPrj * World;
         uboDoor.mMat = World;
         uboDoor.nMat = glm::inverse(glm::transpose(World));
-        for(int i = 0; i < N_ROOMS - 1; i++) {
+        for (int i = 0; i < N_ROOMS - 1; i++) {
             uboDoor.door[i] = glm::vec4(doors[i].doorRot);
         }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
