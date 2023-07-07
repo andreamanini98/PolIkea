@@ -514,10 +514,11 @@ initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector<uint32_t> *
     vIdxGround->push_back(2);
     vIdxGround->push_back(3);
 
+    // TODO CHECK THESE NORMALS
     insertRectVertices(bottomLeft, topLeft, topLeft + h, bottomLeft + h, {1.0f, 0.0f, 0.0f}, vPosFence);
     insertRectVertices(topLeft, topRight, topRight + h, topLeft + h, {0.0f, 0.0f, 1.0f}, vPosFence);
-    insertRectVertices(topRight, bottomRight, bottomRight + h, topRight + h, {1.0f, 0.0f, 0.0f}, vPosFence);
-    insertRectVertices(bottomRight, bottomLeft, bottomLeft + h, bottomRight + h, {0.0f, 0.0f, 1.0f}, vPosFence);
+    insertRectVertices(topRight, bottomRight, bottomRight + h, topRight + h, {-1.0f, 0.0f, 0.0f}, vPosFence);
+    insertRectVertices(bottomRight, bottomLeft, bottomLeft + h, bottomRight + h, {0.0f, 0.0f, -1.0f}, vPosFence);
 
     for (int i = 0; i < 4; i++) {
         vIdxFence->push_back(i * 4 + 0);
