@@ -205,7 +205,7 @@ public:
     }
 
     void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color,
-                             float openingOffset, Direction doordirection) {
+                             float openingOffset, Direction doorDirection, std::vector<BoundingRectangle> *bounds) {
         glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
 
         glm::vec3 openingDir = glm::normalize(v1 - v0); //TODO
@@ -222,12 +222,27 @@ public:
         drawRect(openingV3, openingV2, ceilingOpeningV12, ceilingOpeningV03, vecDir, color);
         drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, color);
 
+        glm::vec3 bOffset = glm::vec3(-0.2, 0.0, 0.2);
+        glm::vec3 tOffset = glm::vec3(0.2, 0.0, -0.2);
+        // Placing boundings on walls with doors
+        if (doorDirection == NORTH || doorDirection == SOUTH) {
+            bounds->push_back(
+                    BoundingRectangle{v0 + bOffset, openingV0 + tOffset});
+            bounds->push_back(
+                    BoundingRectangle{openingV1 + bOffset, v1 + tOffset});
+        } else if (doorDirection == EAST || doorDirection == WEST) {
+            bounds->push_back(
+                    BoundingRectangle{openingV0 + bOffset, v0 + tOffset});
+            bounds->push_back(
+                    BoundingRectangle{v1 + bOffset, openingV1 + tOffset});
+        }
+
         printf("%f %f %f\n", openingV0.x, openingV0.y, openingV0.z);
 
-        if (/*doorIndices.find(openingV0) == doorIndices.end()*/ doordirection == NORTH || doordirection == EAST) {
+        if (/*doorIndices.find(openingV0) == doorIndices.end()*/ doorDirection == NORTH || doorDirection == EAST) {
             //doorIndices.insert(openingV0);
             float rotType;
-            if (doordirection == NORTH || doordirection == SOUTH) {
+            if (doorDirection == NORTH || doorDirection == SOUTH) {
                 rotType = glm::radians(0.0f);
             } else {
                 rotType = glm::radians(90.0f);
@@ -310,7 +325,7 @@ inline std::vector<Room> generateFloorplan(float dimension) {
 
 inline glm::vec3
 floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx,
-                      std::vector<OpenableDoor> &openableDoors) {
+                      std::vector<OpenableDoor> &openableDoors, std::vector<BoundingRectangle> *bounds) {
     VertexStorage storage(vPos, vIdx, openableDoors);
     int test = 0;
     glm::vec3 startingRoomCenter = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -369,15 +384,37 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
             }
         }
 
+        glm::vec3 bOffset = glm::vec3(-0.2, 0.0, 0.2);
+        glm::vec3 tOffset = glm::vec3(0.2, 0.0, -0.2);
+        // Checks to put boundings on walls without doors
+        if (!hasDoorSouth) {
+            bounds->push_back(
+                    BoundingRectangle{glm::vec3(room.startX, 0, room.startY) + bOffset,
+                                      glm::vec3(room.startX + room.width, 0, room.startY) + tOffset});
+        }
+        if (!hasDoorNorth) {
+            bounds->push_back(
+                    BoundingRectangle{glm::vec3(room.startX, 0, room.startY + room.depth) + bOffset,
+                                      glm::vec3(room.startX + room.width, 0, room.startY + room.depth) + tOffset});
+        }
+        if (!hasDoorWest) {
+            bounds->push_back(
+                    BoundingRectangle{glm::vec3(room.startX, 0, room.startY + room.depth) + bOffset,
+                                      glm::vec3(room.startX, 0, room.startY) + tOffset});
+        }
+        if (!hasDoorEast) {
+            bounds->push_back(BoundingRectangle{
+                    glm::vec3(room.startX + room.width, 0, room.startY + room.depth) + bOffset,
+                    glm::vec3(room.startX + room.width, 0, room.startY) + tOffset});
+        }
+
         if (hasDoorSouth) {
             storage.drawRectWithOpening(
                     glm::vec3(room.startX, 0, room.startY),
                     glm::vec3(room.startX + room.width, 0, room.startY),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    1,
-                    color,
-                    offsetSouth, SOUTH
+                    1, color, offsetSouth, SOUTH, bounds
             );
         } else {
             storage.drawRect(
@@ -385,8 +422,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    1,
-                    color
+                    1, color
             );
         }
 
@@ -396,9 +432,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    -1,
-                    color,
-                    offsetNorth, NORTH
+                    -1, color, offsetNorth, NORTH, bounds
             );
         } else {
             storage.drawRect(
@@ -406,8 +440,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    -1,
-                    color
+                    -1, color
             );
         }
 
@@ -417,9 +450,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX, 0, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    -1,
-                    color,
-                    offsetWest, WEST
+                    -1, color, offsetWest, WEST, bounds
             );
         } else {
             storage.drawRect(
@@ -427,8 +458,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX, 0, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    -1,
-                    color
+                    -1, color
             );
         }
 
@@ -438,9 +468,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                    1,
-                    color,
-                    offsetEast, EAST
+                    1, color, offsetEast, EAST, bounds
             );
         } else {
             storage.drawRect(
@@ -448,8 +476,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                    1,
-                    color
+                    1, color
             );
         }
 
@@ -780,7 +807,8 @@ protected:
 
 
         auto floorplan = generateFloorplan(MAX_DIMENSION);
-        startingRoomCenter = floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors);
+        startingRoomCenter = floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors,
+                                                   &boundingRectangles);
         MBuilding.initMesh(this, &VVertexWithColor);
 
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
