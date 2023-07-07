@@ -301,10 +301,17 @@ inline std::vector<Room> generateFloorplan(float dimension) {
     return std::move(rooms);
 }
 
-inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx, std::vector<OpenableDoor> &openableDoors) {
+inline glm::vec3 floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx, std::vector<OpenableDoor> &openableDoors) {
     VertexStorage storage(vPos, vIdx, openableDoors);
     int test = 0;
+    glm::vec3 startingRoomCenter = glm::vec3(0.0f, 0.0f, 0.0f);
+
     for (auto &room: rooms) {
+        if (test == 0) {
+            startingRoomCenter.x = room.startX + room.width / 2;
+            startingRoomCenter.z = room.startY + room.depth / 2;
+        }
+
         auto color = glm::vec3((test % 3) == 0, (test % 3) == 1, (test % 3) == 2);
 
         storage.drawRect(
@@ -439,6 +446,8 @@ inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<Ve
 
         test++;
     }
+
+    return startingRoomCenter;
 }
 
 // Struct used to store data related to a model
@@ -448,6 +457,7 @@ struct ModelInfo {
     UniformBlock modelUBO{};
     glm::vec3 modelPos{};
     float modelRot = 0.0;
+    bool hasBeenBought = false;
 
     float cylinderRadius;
     float cylinderHeight;
@@ -532,6 +542,7 @@ protected:
     float CamRho = 0.0f;
     bool OnlyMoveCam = true;
     uint32_t MoveObjIndex = 0;
+    glm::vec3 startingRoomCenter;
 
     Model<Vertex, DoorModelInstance> MDoor;
     DescriptorSet DSDoor;
@@ -713,7 +724,7 @@ protected:
 
 
         auto floorplan = generateFloorplan(MAX_DIMENSION);
-        floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors);
+        startingRoomCenter = floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors);
         MBuilding.initMesh(this, &VVertexWithColor);
 
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
@@ -992,33 +1003,39 @@ protected:
         }
 
         if (!OnlyMoveCam) {
-            const glm::vec3 modelPos = glm::vec3(
-                    CamPos.x,
-                    CamPos.y - 0.7f,
-                    CamPos.z - 2.0f
-            );
+            if (!MV[MoveObjIndex].hasBeenBought) {
+                MV[MoveObjIndex].modelPos = startingRoomCenter;
+                MV[MoveObjIndex].hasBeenBought = true;
+                OnlyMoveCam = true;
+            } else {
+                const glm::vec3 modelPos = glm::vec3(
+                        CamPos.x,
+                        CamPos.y - 0.7f,
+                        CamPos.z - 2.0f
+                );
 
-            glm::vec3 oldPos = MV[MoveObjIndex].modelPos;
+                glm::vec3 oldPos = MV[MoveObjIndex].modelPos;
 
-            MV[MoveObjIndex].modelPos =
-                    glm::translate(glm::mat4(1.0f), CamPos) *
-                    glm::rotate(glm::mat4(1), CamAlpha, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                    glm::rotate(glm::mat4(1), CamBeta, glm::vec3(1.0f, 0.0f, 0.0f)) *
-                    glm::translate(glm::mat4(1.0f), -CamPos) *
-                    glm::vec4(modelPos, 1.0f);
+                MV[MoveObjIndex].modelPos =
+                        glm::translate(glm::mat4(1.0f), CamPos) *
+                        glm::rotate(glm::mat4(1), CamAlpha, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::rotate(glm::mat4(1), CamBeta, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                        glm::translate(glm::mat4(1.0f), -CamPos) *
+                        glm::vec4(modelPos, 1.0f);
 
-            if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
+                if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
 
-            for (int i = 0; i < MV.size(); i++) {
-                if (i != MoveObjIndex) {
-                    if (MV[MoveObjIndex].checkCollision(MV[i])) {
-                        MV[MoveObjIndex].modelPos = oldPos;
-                        break;
+                for (int i = 0; i < MV.size(); i++) {
+                    if (i != MoveObjIndex) {
+                        if (MV[MoveObjIndex].checkCollision(MV[i])) {
+                            MV[MoveObjIndex].modelPos = oldPos;
+                            break;
+                        }
                     }
                 }
-            }
 
-            MV[MoveObjIndex].modelRot = CamAlpha;
+                MV[MoveObjIndex].modelRot = CamAlpha;
+            }
         }
 
         for(auto& Door: doors) {
@@ -1026,7 +1043,7 @@ protected:
                 Door.doorState = OPENING;
             }
 
-            if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == OPEN) {
+            if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
                 Door.doorState = CLOSING;
             }
 
@@ -1081,6 +1098,15 @@ protected:
                 debounce = false;
                 curDebounce = 0;
             }
+        }
+
+        if(glfwGetKey(window, GLFW_KEY_H)) {
+            CamPos = startingRoomCenter + glm::vec3(0.0f, 0.7, 3.0f);
+            CamAlpha = CamBeta = CamRho = 0.0f;
+        }
+        if(glfwGetKey(window, GLFW_KEY_K)) {
+            CamPos = polikeaBuildingPosition + glm::vec3(5.0f, 0.7, 5.0f);
+            CamAlpha = CamBeta = CamRho = 0.0f;
         }
 
         gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
