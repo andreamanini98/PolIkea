@@ -296,6 +296,7 @@ struct DescriptorSetLayoutBinding {
 	uint32_t binding;
 	VkDescriptorType type;
 	VkShaderStageFlags flags;
+    uint32_t count = 1;
 };
 
 
@@ -343,6 +344,7 @@ struct DescriptorSetElement {
 	DescriptorSetElementType type;
 	int size;
 	Texture *tex;
+    int texDstArrayElement = 0;
 };
 
 struct DescriptorSet {
@@ -482,7 +484,7 @@ protected:
     }
 
     void createInstance() {
-std::cout << "Starting createInstance()\n"  << std::flush;
+    std::cout << "Starting createInstance()\n"  << std::flush;
     	VkApplicationInfo appInfo{};
        	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     	appInfo.pApplicationName = windowTitle.c_str();
@@ -521,6 +523,16 @@ std::cout << "Starting createInstance()\n"  << std::flush;
 			createInfo.ppEnabledLayerNames = validationLayers.data();
 
 			populateDebugMessengerCreateInfo(debugCreateInfo);
+
+        VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures;
+        physicalDeviceDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+        physicalDeviceDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+        physicalDeviceDescriptorIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
+        physicalDeviceDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
+        physicalDeviceDescriptorIndexingFeatures.pNext = nullptr;
+
+        debugCreateInfo.pNext = &physicalDeviceDescriptorIndexingFeatures;
+
 			createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)
 									&debugCreateInfo;
 
@@ -550,6 +562,10 @@ std::cout << "Starting createInstance()\n"  << std::flush;
 		if(checkIfItHasExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)) {
 			extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 		}
+
+        if(checkIfItHasExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME)) {
+            extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        }
 
 		return extensions;
 	}
@@ -702,6 +718,8 @@ std::cout << "Starting createInstance()\n"  << std::flush;
 			if(checkIfItHasDeviceExtension(device, "VK_KHR_portability_subset")) {
 				deviceExtensions.push_back("VK_KHR_portability_subset");
 			}
+
+            deviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 
 			bool suitable = isDeviceSuitable(device, devRep);
 			if (suitable) {
@@ -864,8 +882,10 @@ std::cout << "Starting createInstance()\n"  << std::flush;
 		VkPhysicalDeviceFeatures deviceFeatures{};
 		deviceFeatures.samplerAnisotropy = VK_TRUE;
 		deviceFeatures.sampleRateShading = VK_TRUE;
+        deviceFeatures.shaderStorageImageExtendedFormats = VK_TRUE;
+        deviceFeatures.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
 
-		VkDeviceCreateInfo createInfo{};
+        VkDeviceCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 
 		createInfo.pQueueCreateInfos = queueCreateInfos.data();
@@ -2862,7 +2882,7 @@ void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutB
 	for(int i = 0; i < B.size(); i++) {
 		bindings[i].binding = B[i].binding;
 		bindings[i].descriptorType = B[i].type;
-		bindings[i].descriptorCount = 1;
+		bindings[i].descriptorCount = B[i].count;
 		bindings[i].stageFlags = B[i].flags;
 		bindings[i].pImmutableSamplers = nullptr;
 	}
@@ -2951,7 +2971,7 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 				descriptorWrites[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[j].dstSet = descriptorSets[i];
 				descriptorWrites[j].dstBinding = E[j].binding;
-				descriptorWrites[j].dstArrayElement = 0;
+				descriptorWrites[j].dstArrayElement = E[j].texDstArrayElement;
 				descriptorWrites[j].descriptorType =
 											VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 				descriptorWrites[j].descriptorCount = 1;

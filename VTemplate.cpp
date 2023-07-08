@@ -157,6 +157,13 @@ struct Vertex {
     glm::vec2 UV;
 };
 
+struct VertexWithTextID {
+    glm::vec3 pos;
+    glm::vec3 norm;
+    glm::vec2 UV;
+    uint8_t texID;
+};
+
 struct VertexOverlay {
     glm::vec2 pos;
     glm::vec2 UV;
@@ -168,30 +175,33 @@ struct VertexVColor {
     glm::vec3 color;
 };
 
-
+#define WALL_TEXTURES_PER_PIXEL (1.0f/4.0)
 class VertexStorage {
     uint32_t vertexCurIdx = 0;
-    std::vector<VertexVColor> &vPos;
+    std::vector<VertexWithTextID> &vPos;
     std::vector<uint32_t> &vIdx;
     std::vector<OpenableDoor> &openableDoors;
 public:
     VertexStorage(
-            std::vector<VertexVColor> &vPos,
+            std::vector<VertexWithTextID> &vPos,
             std::vector<uint32_t> &vIdx,
             std::vector<OpenableDoor> &openableDoors
     ) : vPos(vPos), vIdx(vIdx), vertexCurIdx(vPos.size()), openableDoors(openableDoors) {}
 
-    uint32_t addVertex(VertexVColor color) {
+    uint32_t addVertex(VertexWithTextID color) {
         vPos.push_back(color);
         return vertexCurIdx++;
     }
 
-    void drawRect(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color) {
-        glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
-        auto i0 = addVertex({v0, norm, color});
-        auto i1 = addVertex({v1, norm, color});
-        auto i2 = addVertex({v2, norm, color});
-        auto i3 = addVertex({v3, norm, color});
+    void drawRect(glm::vec3 bottomLeft, glm::vec3 bottomRight, glm::vec3 topRight, glm::vec3 topLeft, int vecDir, glm::vec3 color, uint8_t texID) {
+        auto width = glm::length(bottomRight - bottomLeft);
+        auto height = glm::length(topLeft - bottomLeft);
+
+        glm::vec3 norm = glm::normalize(glm::cross(bottomRight - bottomLeft, topRight - bottomLeft)) * (vecDir > 0 ? 1.0f : -1.0f);
+        auto i0 = addVertex({bottomLeft, norm, {0.0f, 0.0f}, texID});
+        auto i1 = addVertex({bottomRight, norm, {width * WALL_TEXTURES_PER_PIXEL, 0.0f}, texID});
+        auto i2 = addVertex({topRight, norm, {width * WALL_TEXTURES_PER_PIXEL, height * WALL_TEXTURES_PER_PIXEL}, texID});
+        auto i3 = addVertex({topLeft, norm, {0.0f, height * WALL_TEXTURES_PER_PIXEL}, texID});
 
         //printf("%d %d %d %d\n", i0, i1, i2, i3);
 
@@ -205,7 +215,7 @@ public:
     }
 
     void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color,
-                             float openingOffset, Direction doorDirection, std::vector<BoundingRectangle> *bounds) {
+                             float openingOffset, Direction doorDirection, std::vector<BoundingRectangle> *bounds, uint8_t texID) {
         glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
 
         glm::vec3 openingDir = glm::normalize(v1 - v0); //TODO
@@ -218,9 +228,9 @@ public:
         glm::vec3 ceilingOpeningV03 = openingV0 + openingUpDir * ROOM_CEILING_HEIGHT;
         glm::vec3 ceilingOpeningV12 = openingV1 + openingUpDir * ROOM_CEILING_HEIGHT;
 
-        drawRect(v0, openingV0, ceilingOpeningV03, v3, vecDir, color);
-        drawRect(openingV3, openingV2, ceilingOpeningV12, ceilingOpeningV03, vecDir, color);
-        drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, color);
+        drawRect(v0, openingV0, ceilingOpeningV03, v3, vecDir, color, texID);
+        drawRect(openingV3, openingV2, ceilingOpeningV12, ceilingOpeningV03, vecDir, color, texID);
+        drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, color, texID);
 
         glm::vec3 bOffset = glm::vec3(-0.2, 0.0, 0.2);
         glm::vec3 tOffset = glm::vec3(0.2, 0.0, -0.2);
@@ -324,13 +334,17 @@ inline std::vector<Room> generateFloorplan(float dimension) {
 }
 
 inline glm::vec3
-floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> &vPos, std::vector<uint32_t> &vIdx,
+floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithTextID> &vPos, std::vector<uint32_t> &vIdx,
                       std::vector<OpenableDoor> &openableDoors, std::vector<BoundingRectangle> *bounds) {
     VertexStorage storage(vPos, vIdx, openableDoors);
     int test = 0;
     glm::vec3 startingRoomCenter = glm::vec3(0.0f, 0.0f, 0.0f);
 
     for (auto &room: rooms) {
+        int floorTex = 1;
+        int ceilingTex = 0;
+        int wallTex = 0;
+
         if (test == 0) {
             startingRoomCenter.x = room.startX + room.width / 2;
             startingRoomCenter.z = room.startY + room.depth / 2;
@@ -344,7 +358,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                 glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                 glm::vec3(room.startX, 0, room.startY + room.depth),
                 -1,
-                color
+                color,
+                floorTex
         );
 
         storage.drawRect(
@@ -353,7 +368,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                 glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                 glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                 1,
-                color
+                color,
+                ceilingTex
         );
 
         bool hasDoorNorth = false;
@@ -414,7 +430,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    1, color, offsetSouth, SOUTH, bounds
+                    1, color, offsetSouth, SOUTH, bounds,
+                    wallTex
             );
         } else {
             storage.drawRect(
@@ -422,7 +439,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    1, color
+                    1, color,
+                    wallTex
             );
         }
 
@@ -432,7 +450,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    -1, color, offsetNorth, NORTH, bounds
+                    -1, color, offsetNorth, NORTH, bounds,
+                    wallTex
             );
         } else {
             storage.drawRect(
@@ -440,7 +459,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    -1, color
+                    -1, color,
+                    wallTex
             );
         }
 
@@ -450,7 +470,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX, 0, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    -1, color, offsetWest, WEST, bounds
+                    -1, color, offsetWest, WEST, bounds,
+                    wallTex
             );
         } else {
             storage.drawRect(
@@ -458,7 +479,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX, 0, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    -1, color
+                    -1, color,
+                    wallTex
             );
         }
 
@@ -468,7 +490,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                    1, color, offsetEast, EAST, bounds
+                    1, color, offsetEast, EAST, bounds,
+                    wallTex
             );
         } else {
             storage.drawRect(
@@ -476,7 +499,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                    1, color
+                    1, color,
+                    wallTex
             );
         }
 
@@ -487,16 +511,18 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexVColor> 
 }
 
 
-inline void
-insertRectVertices(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 norm, std::vector<Vertex> *vPos) {
-    vPos->push_back({v0, norm, {0.0f, 1.0f}});
-    vPos->push_back({v1, norm, {1.0f, 1.0f}});
-    vPos->push_back({v2, norm, {1.0f, 0.0f}});
+inline void insertRectVertices(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 norm, std::vector<Vertex> *vPos, float aspect_ratio) {
+    float repeat_x = glm::abs(glm::distance(v0, v1)) / (8.0f);
+    float repeat_y = glm::abs(glm::distance(v2, v1)) / (8.0f * aspect_ratio);
+
+    vPos->push_back({v0, norm, {0.0f, repeat_y}});
+    vPos->push_back({v1, norm, {repeat_x, repeat_y}});
+    vPos->push_back({v2, norm, {repeat_x, 0.0f}});
     vPos->push_back({v3, norm, {0.0f, 0.0f}});
 }
 
-inline void
-initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector<uint32_t> *vIdxGround,
+#define FENCE_ASPECT_RATIO (1333.0f/2000.0f)
+inline void initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector<uint32_t> *vIdxGround,
                         std::vector<Vertex> *vPosFence, std::vector<uint32_t> *vIdxFence,
                         glm::vec3 polikeaPos, float frontOffset, float sideOffset, float backOffset) {
     // Vertices of the ground as seen from a top view
@@ -506,7 +532,7 @@ initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector<uint32_t> *
     glm::vec3 bottomRight = polikeaPos + glm::vec3(sideOffset, 0.0f, frontOffset);
     glm::vec3 h = glm::vec3(0.0f, 15.0f, 0.0f);
 
-    insertRectVertices(bottomLeft, topLeft, topRight, bottomRight, {0.0f, 1.0f, 0.0f}, vPosGround);
+    insertRectVertices(bottomLeft, topLeft, topRight, bottomRight, {0.0f, 1.0f, 0.0f}, vPosGround, 1.0f);
     vIdxGround->push_back(0);
     vIdxGround->push_back(1);
     vIdxGround->push_back(2);
@@ -515,10 +541,10 @@ initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector<uint32_t> *
     vIdxGround->push_back(3);
 
     // TODO CHECK THESE NORMALS
-    insertRectVertices(bottomLeft, topLeft, topLeft + h, bottomLeft + h, {1.0f, 0.0f, 0.0f}, vPosFence);
-    insertRectVertices(topLeft, topRight, topRight + h, topLeft + h, {0.0f, 0.0f, 1.0f}, vPosFence);
-    insertRectVertices(topRight, bottomRight, bottomRight + h, topRight + h, {-1.0f, 0.0f, 0.0f}, vPosFence);
-    insertRectVertices(bottomRight, bottomLeft, bottomLeft + h, bottomRight + h, {0.0f, 0.0f, -1.0f}, vPosFence);
+    insertRectVertices(bottomLeft, topLeft, topLeft + h, bottomLeft + h, {1.0f, 0.0f, 0.0f}, vPosFence, FENCE_ASPECT_RATIO);
+    insertRectVertices(topLeft, topRight, topRight + h, topLeft + h, {0.0f, 0.0f, 1.0f}, vPosFence, FENCE_ASPECT_RATIO);
+    insertRectVertices(topRight, bottomRight, bottomRight + h, topRight + h, {-1.0f, 0.0f, 0.0f}, vPosFence, FENCE_ASPECT_RATIO);
+    insertRectVertices(bottomRight, bottomLeft, bottomLeft + h, bottomRight + h, {0.0f, 0.0f, -1.0f}, vPosFence, FENCE_ASPECT_RATIO);
 
     for (int i = 0; i < 4; i++) {
         vIdxFence->push_back(i * 4 + 0);
@@ -584,13 +610,13 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiInstance, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors;
 
     // Vertex formats
-    VertexDescriptor VMesh, VOverlay, VVertexWithColor, VMeshInstanced;
+    VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced;
 
     // Pipelines [Shader couples]
-    Pipeline PMesh, POverlay, PVertexWithColors, PMeshInstanced;
+    Pipeline PMesh, PMeshMultiTexture, POverlay, PVertexWithColors, PMeshInstanced;
 
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
@@ -598,12 +624,12 @@ protected:
     Model<Vertex> MPolikeaExternFloor, MFence;
     Model<VertexOverlay> MOverlay;
     Model<VertexVColor> MPolikeaBuilding;
-    Model<VertexVColor> MBuilding;
+    Model<VertexWithTextID> MBuilding;
 
     // Descriptor sets
     DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
     // Textures
-    Texture T1, T2, T3, TOverlayMoveObject;
+    Texture TAsphalt, T2, T3, TPlankWall, TOverlayMoveObject;
     // C++ storage for uniform variables
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
@@ -669,6 +695,16 @@ protected:
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
         });
+        DSLMeshMultiInstance.init(this, {
+                // This array contains the bindings:
+                // first  element : the binding number
+                // second element : the type of element (buffer or texture)
+                //                  using the corresponding Vulkan constant
+                // third  element : the pipeline stage where it will be used
+                //                  using the corresponding Vulkan constant
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
+                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 2},
+        });
         DSLDoor.init(this, {
                 // This array contains the bindings:
                 // first  element : the binding number
@@ -729,6 +765,44 @@ protected:
                                    sizeof(glm::vec2), UV},
                    });
 
+        VMeshTexID.init(this, {
+                // This array contains the bindings:
+                // first  element : the binding number
+                // second element : the stride of this binding
+                // third  element : whether this parameter changes per vertex or per instance
+                //                  using the corresponding Vulkan constant
+                {0, sizeof(VertexWithTextID), VK_VERTEX_INPUT_RATE_VERTEX}
+        }, {
+                           // This array contains the location:
+                           // first  element : the binding number
+                           // second element : the location number
+                           // third  element : the offset of this element in the memory record
+                           // fourth element : the data type of the element
+                           //                  using the corresponding Vulkan constant
+                           // fifth  element : the size in byte of the element
+                           // sixth  element : a constant defining the element usage
+                           //                   POSITION - a vec3 with the position
+                           //                   NORMAL   - a vec3 with the normal vector
+                           //                   UV       - a vec2 with a UV coordinate
+                           //                   COLOR    - a vec4 with a RGBA color
+                           //                   TANGENT  - a vec4 with the tangent vector
+                           //                   OTHER    - anything else
+                           //
+                           // ***************** DOUBLE CHECK ********************
+                           //  That the Vertex data structure you use in the "offsetoff" and
+                           //	in the "sizeof" in the previous array, refers to the correct one,
+                           //	if you have more than one vertex format!
+                           // ***************************************************
+                           {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexWithTextID, pos),
+                                   sizeof(glm::vec3), POSITION},
+                           {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexWithTextID, norm),
+                                   sizeof(glm::vec3), NORMAL},
+                           {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(VertexWithTextID, UV),
+                                   sizeof(glm::vec2), UV},
+                           {0, 3, VK_FORMAT_R8_UINT,    offsetof(VertexWithTextID, texID),
+                                   sizeof(uint8_t), UV},
+                   });
+
         VOverlay.init(this, {
                 {0, sizeof(VertexOverlay), VK_VERTEX_INPUT_RATE_VERTEX}
         }, {
@@ -773,6 +847,8 @@ protected:
         PMesh.init(this, &VMesh, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLMesh});
         PMesh.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
+        PMeshMultiTexture.init(this, &VMeshTexID, "shaders/ShaderVertMultiTexture.spv", "shaders/ShaderFragMultiTexture.spv", {&DSLGubo, &DSLMeshMultiInstance});
+
         POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
@@ -808,9 +884,8 @@ protected:
 
 
         auto floorplan = generateFloorplan(MAX_DIMENSION);
-        startingRoomCenter = floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors,
-                                                   &boundingRectangles);
-        MBuilding.initMesh(this, &VVertexWithColor);
+        startingRoomCenter = floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors, &boundingRectangles);
+        MBuilding.initMesh(this, &VMeshTexID);
 
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
 
@@ -823,9 +898,10 @@ protected:
 
         // Create the textures
         // The second parameter is the file name
-        T1.init(this, "textures/Asphalt.jpg");
+        TAsphalt.init(this, "textures/Asphalt.jpg");
         T2.init(this, "textures/Textures_Forniture.png");
         T3.init(this, "textures/Fence.jpg");
+        TPlankWall.init(this, "textures/plank_wall.jpg");
         TOverlayMoveObject.init(this, "textures/MoveBanner.png");
 
         // Init local variables
@@ -884,6 +960,7 @@ protected:
     void pipelinesAndDescriptorSetsInit() {
         // This creates a new pipeline (with the current surface), using its shaders
         PMesh.create();
+        PMeshMultiTexture.create();
         POverlay.create();
         PVertexWithColors.create();
         PMeshInstanced.create();
@@ -897,7 +974,7 @@ protected:
                 // third  element : only for UNIFORMS, the size of the corresponding C++ object. For texture, just put 0
                 // fourth element : only for TEXTURES, the pointer to the corresponding texture object. For uniforms, use nullptr
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
-                {1, TEXTURE, 0,                    &T1}
+                {1, TEXTURE, 0,                    &TAsphalt}
         });
         DSFence.init(this, &DSLMesh, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
@@ -918,8 +995,10 @@ protected:
                 {1, TEXTURE, 0,                         &T2}
         });
 
-        DSBuilding.init(this, &DSLVertexWithColors, {
-                {0, UNIFORM, sizeof(UniformBlock), nullptr}
+        DSBuilding.init(this, &DSLMeshMultiInstance, {
+                {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                {1, TEXTURE, 0,                    &TPlankWall, 0},
+                {1, TEXTURE, 0,                    &TAsphalt, 1}
         });
 
         for (auto &mInfo: MV) {
@@ -935,6 +1014,7 @@ protected:
     void pipelinesAndDescriptorSetsCleanup() {
         // Cleanup pipelines
         PMesh.cleanup();
+        PMeshInstanced.destroy();
         POverlay.cleanup();
         PVertexWithColors.cleanup();
         PMeshInstanced.cleanup();
@@ -958,10 +1038,11 @@ protected:
     // methods: .cleanup() recreates them, while .destroy() delete them completely
     void localCleanup() {
         // Cleanup textures
-        T1.cleanup();
+        TAsphalt.cleanup();
         T2.cleanup();
         T3.cleanup();
         TOverlayMoveObject.cleanup();
+        TPlankWall.cleanup();
 
         // Cleanup models
         MPolikeaExternFloor.cleanup();
@@ -975,6 +1056,7 @@ protected:
 
         // Cleanup descriptor set layouts
         DSLMesh.cleanup();
+        DSLMeshMultiInstance.cleanup();
         DSLGubo.cleanup();
         DSLOverlay.cleanup();
         DSLVertexWithColors.cleanup();
@@ -982,6 +1064,7 @@ protected:
 
         // Destroys the pipelines
         PMesh.destroy();
+        PMeshMultiTexture.destroy();
         POverlay.destroy();
         PVertexWithColors.destroy();
         PMeshInstanced.destroy();
@@ -992,6 +1075,24 @@ protected:
     // with their buffers and textures
 
     void populateCommandBuffer(VkCommandBuffer commandBuffer, int currentImage) {
+        // binds the pipeline
+        // For a pipeline object, this command binds the corresponding pipeline to the command buffer passed in its parameter
+        PMeshMultiTexture.bind(commandBuffer);
+
+        // binds the data set
+        // For a Dataset object, this command binds the corresponding dataset
+        // to the command buffer and pipeline passed in its first and second parameters.
+        // The third parameter is the number of the set being bound
+        // As described in the Vulkan tutorial, a different dataset is required for each image in the swap chain.
+        // This is done automatically in file Starter.hpp, however the command here needs also the index
+        // of the current image in the swap chain, passed in its last parameter
+        DSGubo.bind(commandBuffer, PMeshMultiTexture, 0, currentImage);
+
+        DSBuilding.bind(commandBuffer, PMeshMultiTexture, 1, currentImage);
+        MBuilding.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
+
+
         // binds the pipeline
         // For a pipeline object, this command binds the corresponding pipeline to the command buffer passed in its parameter
         PMesh.bind(commandBuffer);
@@ -1037,10 +1138,6 @@ protected:
         DSPolikeaBuilding.bind(commandBuffer, PVertexWithColors, 1, currentImage);
         MPolikeaBuilding.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaBuilding.indices.size()), 1, 0, 0, 0);
-
-        DSBuilding.bind(commandBuffer, PVertexWithColors, 1, currentImage);
-        MBuilding.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
 
         PMeshInstanced.bind(commandBuffer);
         DSGubo.bind(commandBuffer, PMeshInstanced, 0, currentImage);
