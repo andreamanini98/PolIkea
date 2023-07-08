@@ -610,7 +610,7 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLMeshMultiInstance, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors;
 
     // Vertex formats
     VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced;
@@ -671,7 +671,7 @@ protected:
         // TODO resize to match the actual descriptors used in the code
         uniformBlocksInPool = 100;
         texturesInPool = 100;
-        setsInPool = 100;
+        setsInPool = 500;
 
         Ar = (float) windowWidth / (float) windowHeight;
     }
@@ -695,7 +695,7 @@ protected:
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
         });
-        DSLMeshMultiInstance.init(this, {
+        DSLMeshMultiTex.init(this, {
                 // This array contains the bindings:
                 // first  element : the binding number
                 // second element : the type of element (buffer or texture)
@@ -800,7 +800,7 @@ protected:
                            {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(VertexWithTextID, UV),
                                    sizeof(glm::vec2), UV},
                            {0, 3, VK_FORMAT_R8_UINT,    offsetof(VertexWithTextID, texID),
-                                   sizeof(uint8_t), UV},
+                                   sizeof(uint8_t), OTHER},
                    });
 
         VOverlay.init(this, {
@@ -847,7 +847,7 @@ protected:
         PMesh.init(this, &VMesh, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLMesh});
         PMesh.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PMeshMultiTexture.init(this, &VMeshTexID, "shaders/ShaderVertMultiTexture.spv", "shaders/ShaderFragMultiTexture.spv", {&DSLGubo, &DSLMeshMultiInstance});
+        PMeshMultiTexture.init(this, &VMeshTexID, "shaders/ShaderVertMultiTexture.spv", "shaders/ShaderFragMultiTexture.spv", {&DSLGubo, &DSLMeshMultiTex});
 
         POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
@@ -995,7 +995,7 @@ protected:
                 {1, TEXTURE, 0,                         &T2}
         });
 
-        DSBuilding.init(this, &DSLMeshMultiInstance, {
+        DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
                 {1, TEXTURE, 0,                    &TPlankWall, 0},
                 {1, TEXTURE, 0,                    &TAsphalt, 1}
@@ -1017,7 +1017,7 @@ protected:
         PMeshInstanced.destroy();
         POverlay.cleanup();
         PVertexWithColors.cleanup();
-        PMeshInstanced.cleanup();
+        PMeshMultiTexture.cleanup();
 
         // Cleanup datasets
         DSPolikeaExternFloor.cleanup();
@@ -1056,7 +1056,7 @@ protected:
 
         // Cleanup descriptor set layouts
         DSLMesh.cleanup();
-        DSLMeshMultiInstance.cleanup();
+        DSLMeshMultiTex.cleanup();
         DSLGubo.cleanup();
         DSLOverlay.cleanup();
         DSLVertexWithColors.cleanup();

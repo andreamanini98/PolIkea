@@ -491,7 +491,7 @@ protected:
     	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     	appInfo.pEngineName = "No Engine";
     	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.apiVersion = VK_API_VERSION_1_0;
+		appInfo.apiVersion = VK_API_VERSION_1_2;
 
 		VkInstanceCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -500,6 +500,12 @@ protected:
 		uint32_t glfwExtensionCount = 0;
 		const char** glfwExtensions;
 		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+        #if defined(VK_USE_PLATFORM_MACOS_MVK)
+                // SRS - on macOS set environment variable to configure MoltenVK for using Metal argument buffers (needed for descriptor indexing)
+                //     - MoltenVK supports Metal argument buffers on macOS, iOS possible in future (see https://github.com/KhronosGroup/MoltenVK/issues/1651)
+                setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
+        #endif
 
 //		createInfo.enabledExtensionCount = glfwExtensionCount;
 //		createInfo.ppEnabledExtensionNames = glfwExtensions;
@@ -517,24 +523,19 @@ protected:
 			throw std::runtime_error("validation layers requested, but not available!");
 		}
 
-		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
-			createInfo.enabledLayerCount =
-				static_cast<uint32_t>(validationLayers.size());
-			createInfo.ppEnabledLayerNames = validationLayers.data();
-
-			populateDebugMessengerCreateInfo(debugCreateInfo);
+        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
+        createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+        createInfo.ppEnabledLayerNames = validationLayers.data();
+        populateDebugMessengerCreateInfo(debugCreateInfo);
 
         VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures;
         physicalDeviceDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
         physicalDeviceDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
         physicalDeviceDescriptorIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
         physicalDeviceDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
-        physicalDeviceDescriptorIndexingFeatures.pNext = nullptr;
+        physicalDeviceDescriptorIndexingFeatures.pNext = &debugCreateInfo;
 
-        debugCreateInfo.pNext = &physicalDeviceDescriptorIndexingFeatures;
-
-			createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)
-									&debugCreateInfo;
+        createInfo.pNext = &physicalDeviceDescriptorIndexingFeatures;
 
 		VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
 
@@ -562,6 +563,10 @@ protected:
 		if(checkIfItHasExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)) {
 			extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 		}
+
+        if(checkIfItHasExtension(VK_KHR_MAINTENANCE3_EXTENSION_NAME)) {
+            extensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
+        }
 
         if(checkIfItHasExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME)) {
             extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
@@ -1550,6 +1555,10 @@ protected:
 		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());;
 		poolInfo.pPoolSizes = poolSizes.data();
 		poolInfo.maxSets = static_cast<uint32_t>(setsInPool * swapChainImages.size());
+        //TODO #if defined(VK_USE_PLATFORM_MACOS_MVK)
+                // SRS - increase the per-stage descriptor samplers limit on macOS (maxPerStageDescriptorUpdateAfterBindSamplers > maxPerStageDescriptorSamplers)
+            poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        //#endif
 
 		VkResult result = vkCreateDescriptorPool(device, &poolInfo, nullptr,
 									&descriptorPool);
@@ -2877,14 +2886,27 @@ void Pipeline::cleanup() {
 void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutBinding> B) {
 	BP = bp;
 
+    bool POIFlag = false;
+
+    std::vector<VkDescriptorBindingFlagsEXT> descriptorBindingFlags;
 	std::vector<VkDescriptorSetLayoutBinding> bindings;
 	bindings.resize(B.size());
+    descriptorBindingFlags.resize(B.size());
 	for(int i = 0; i < B.size(); i++) {
 		bindings[i].binding = B[i].binding;
 		bindings[i].descriptorType = B[i].type;
 		bindings[i].descriptorCount = B[i].count;
 		bindings[i].stageFlags = B[i].flags;
 		bindings[i].pImmutableSamplers = nullptr;
+
+        if(B[i].type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER && B[i].count > 1) {
+            printf("!!!!!!!!!!!!!!!!BEFORE IT WAS %d\n", B[i].count);
+
+            descriptorBindingFlags.push_back(VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT);
+            POIFlag = true;
+        } else {
+            descriptorBindingFlags.push_back(0);
+        }
 	}
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -2892,8 +2914,23 @@ void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutB
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());;
 	layoutInfo.pBindings = bindings.data();
 
-	VkResult result = vkCreateDescriptorSetLayout(BP->device, &layoutInfo,
-								nullptr, &descriptorSetLayout);
+    if(POIFlag) {
+        // [POI] The fragment shader will be using an unsized array of samplers, which has to be marked with the VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT
+        // In the fragment shader:
+        //	layout (set = 0, binding = 1) uniform sampler2D textures[];
+        VkDescriptorSetLayoutBindingFlagsCreateInfoEXT setLayoutBindingFlags{};
+        setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+        setLayoutBindingFlags.bindingCount = B.size();
+        setLayoutBindingFlags.pBindingFlags = descriptorBindingFlags.data();
+
+        //TODO #if defined(VK_USE_PLATFORM_MACOS_MVK)
+        // SRS - increase the per-stage descriptor samplers limit on macOS (maxPerStageDescriptorUpdateAfterBindSamplers > maxPerStageDescriptorSamplers)
+        layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        //#endif
+        layoutInfo.pNext = &setLayoutBindingFlags;
+    }
+
+	VkResult result = vkCreateDescriptorSetLayout(BP->device, &layoutInfo, nullptr, &descriptorSetLayout);
 	if (result != VK_SUCCESS) {
 		PrintVkError(result);
 		throw std::runtime_error("failed to create descriptor set layout!");
@@ -2939,8 +2976,24 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 
 	descriptorSets.resize(BP->swapChainImages.size());
 
-	VkResult result = vkAllocateDescriptorSets(BP->device, &allocInfo,
-										descriptorSets.data());
+    int textureDynamicSize = 0;
+    for(auto & i : E) {
+        if(i.type == TEXTURE) {
+            textureDynamicSize ++;
+        }
+    }
+    if(textureDynamicSize > 1) {
+        VkDescriptorSetVariableDescriptorCountAllocateInfoEXT variableDescriptorCountAllocInfo = {};
+        uint32_t variableDescCounts[] = {static_cast<uint32_t>(textureDynamicSize)};
+        variableDescriptorCountAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
+        variableDescriptorCountAllocInfo.descriptorSetCount = static_cast<uint32_t>(BP->swapChainImages.size());
+        variableDescriptorCountAllocInfo.pDescriptorCounts = variableDescCounts;
+
+        printf("NOW IT IS %d\n", textureDynamicSize);
+        allocInfo.pNext = &variableDescriptorCountAllocInfo;
+    }
+
+	VkResult result = vkAllocateDescriptorSets(BP->device, &allocInfo, descriptorSets.data());
 	if (result != VK_SUCCESS) {
 		PrintVkError(result);
 		throw std::runtime_error("failed to allocate descriptor sets!");
