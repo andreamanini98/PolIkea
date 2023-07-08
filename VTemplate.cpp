@@ -1014,7 +1014,7 @@ protected:
     void pipelinesAndDescriptorSetsCleanup() {
         // Cleanup pipelines
         PMesh.cleanup();
-        PMeshInstanced.destroy();
+        PMeshInstanced.cleanup();
         POverlay.cleanup();
         PVertexWithColors.cleanup();
         PMeshMultiTexture.cleanup();
