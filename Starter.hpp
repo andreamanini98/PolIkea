@@ -528,14 +528,7 @@ protected:
         createInfo.ppEnabledLayerNames = validationLayers.data();
         populateDebugMessengerCreateInfo(debugCreateInfo);
 
-        VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures;
-        physicalDeviceDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
-        physicalDeviceDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-        physicalDeviceDescriptorIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
-        physicalDeviceDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
-        physicalDeviceDescriptorIndexingFeatures.pNext = &debugCreateInfo;
-
-        createInfo.pNext = &physicalDeviceDescriptorIndexingFeatures;
+        createInfo.pNext = &debugCreateInfo;
 
 		VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
 
@@ -905,6 +898,16 @@ protected:
 			createInfo.enabledLayerCount =
 					static_cast<uint32_t>(validationLayers.size());
 			createInfo.ppEnabledLayerNames = validationLayers.data();
+
+
+        VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures;
+        physicalDeviceDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+        physicalDeviceDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+        physicalDeviceDescriptorIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
+        physicalDeviceDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
+        physicalDeviceDescriptorIndexingFeatures.pNext = nullptr;
+
+        createInfo.pNext = &physicalDeviceDescriptorIndexingFeatures;
 
 		VkResult result = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
 
@@ -2976,20 +2979,23 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 
 	descriptorSets.resize(BP->swapChainImages.size());
 
-    int textureDynamicSize = 0;
+    uint32_t textureDynamicSize = 0;
     for(auto & i : E) {
         if(i.type == TEXTURE) {
             textureDynamicSize ++;
         }
     }
+
+    std::vector<uint32_t> variableDescCounts(BP->swapChainImages.size());
     if(textureDynamicSize > 1) {
         VkDescriptorSetVariableDescriptorCountAllocateInfoEXT variableDescriptorCountAllocInfo = {};
-        uint32_t variableDescCounts[] = {static_cast<uint32_t>(textureDynamicSize)};
         variableDescriptorCountAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
-        variableDescriptorCountAllocInfo.descriptorSetCount = static_cast<uint32_t>(BP->swapChainImages.size());
-        variableDescriptorCountAllocInfo.pDescriptorCounts = variableDescCounts;
+        variableDescriptorCountAllocInfo.descriptorSetCount = variableDescCounts.size();
 
-        printf("NOW IT IS %d\n", textureDynamicSize);
+        for(unsigned int & variableDescCount : variableDescCounts)
+            variableDescCount = textureDynamicSize;
+        variableDescriptorCountAllocInfo.pDescriptorCounts = variableDescCounts.data();
+
         allocInfo.pNext = &variableDescriptorCountAllocInfo;
     }
 
