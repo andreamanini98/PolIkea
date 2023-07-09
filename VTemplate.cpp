@@ -35,9 +35,10 @@ namespace std {
 //REMEMBER TO UPDATE THIS FIELD ALSO IN THE ShaderInstanced.vert
 #define N_ROOMS 6
 
-#define MIN_DIMENSION 12.5f
-#define MAX_DIMENSION 18.0f
-#define DOOR_HWIDTH 0.5f
+#define MIN_DIMENSION (12.5f)
+#define MAX_DIMENSION (18.0f)
+#define DOOR_HWIDTH (0.5f)
+#define WALL_WIDTH (0.1f)
 
 #define ROOM_CEILING_HEIGHT 3.0f
 #define DOOR_HEIGHT 2.5f
@@ -193,29 +194,72 @@ public:
         return vertexCurIdx++;
     }
 
-    void drawRect(glm::vec3 bottomLeft, glm::vec3 bottomRight, glm::vec3 topRight, glm::vec3 topLeft, int vecDir, glm::vec3 color, uint8_t texID) {
+    void drawRect(glm::vec3 bottomLeft, glm::vec3 bottomRight, glm::vec3 topRight, glm::vec3 topLeft, int vecDir, uint8_t texID, glm::vec2 uvOffset = glm::vec2(0.0f, 0.0f)) {
         auto width = glm::length(bottomRight - bottomLeft);
         auto height = glm::length(topLeft - bottomLeft);
 
-        glm::vec3 norm = glm::normalize(glm::cross(bottomRight - bottomLeft, topRight - bottomLeft)) * (vecDir > 0 ? 1.0f : -1.0f);
-        auto i0 = addVertex({bottomLeft, norm, {0.0f, 0.0f}, texID});
-        auto i1 = addVertex({bottomRight, norm, {width * WALL_TEXTURES_PER_PIXEL, 0.0f}, texID});
-        auto i2 = addVertex({topRight, norm, {width * WALL_TEXTURES_PER_PIXEL, height * WALL_TEXTURES_PER_PIXEL}, texID});
-        auto i3 = addVertex({topLeft, norm, {0.0f, height * WALL_TEXTURES_PER_PIXEL}, texID});
+        glm::vec3 norm = glm::abs(glm::normalize(glm::cross(bottomRight - bottomLeft, topRight - bottomLeft))) * (vecDir > 0 ? 1.0f : -1.0f);
+        auto i0 = addVertex({bottomLeft, norm, glm::vec2{0.0f, 0.0f} + uvOffset, texID});
+        auto i1 = addVertex({bottomRight, norm, glm::vec2{width * WALL_TEXTURES_PER_PIXEL, 0.0f} + uvOffset, texID});
+        auto i2 = addVertex({topRight, norm, glm::vec2{width * WALL_TEXTURES_PER_PIXEL, height * WALL_TEXTURES_PER_PIXEL} + uvOffset, texID});
+        auto i3 = addVertex({topLeft, norm, glm::vec2{0.0f, height * WALL_TEXTURES_PER_PIXEL} + uvOffset, texID});
 
         //printf("%d %d %d %d\n", i0, i1, i2, i3);
 
-        if (vecDir > 0) {
-            addIndex(i0, i1, i2);
-            addIndex(i2, i3, i0);
-        } else {
-            addIndex(i2, i1, i0);
-            addIndex(i0, i3, i2);
-        }
+        addIndex(i0, i1, i2);
+        addIndex(i2, i3, i0);
     }
 
-    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, glm::vec3 color,
-                             float openingOffset, Direction doorDirection, std::vector<BoundingRectangle> *bounds, uint8_t texID) {
+    void drawDoorFrame(glm::vec3 hingeCorner, Direction doorDirection, uint8_t tex) {
+        glm::vec3 UP = glm::vec3(0.0f, 1.0f, 0.0f);
+        glm::vec3 doorWidthDir = doorDirection == Direction::NORTH || doorDirection == Direction::SOUTH ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 0.0f, 1.0f);
+        glm::vec3 doorDepthDir = doorDirection == Direction::NORTH || doorDirection == Direction::SOUTH ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+
+        //glm::vec3 hingeCorner = base - doorWidthDir * DOOR_HWIDTH;
+        float DOOR_WIDTH = 2*DOOR_HWIDTH;
+
+        //TOP
+        drawRect(
+                 hingeCorner,
+                hingeCorner + doorWidthDir * DOOR_WIDTH,
+                   hingeCorner + doorWidthDir * DOOR_WIDTH + doorDepthDir * WALL_WIDTH,
+                    hingeCorner                             + doorDepthDir * WALL_WIDTH,
+                1,
+                tex
+        );
+
+        //BOTTOM
+        drawRect(
+                hingeCorner + DOOR_HEIGHT * UP,
+                hingeCorner + doorWidthDir * DOOR_WIDTH + DOOR_HEIGHT * UP,
+                hingeCorner + doorWidthDir * DOOR_WIDTH + doorDepthDir * WALL_WIDTH + DOOR_HEIGHT * UP,
+                hingeCorner + doorDepthDir * WALL_WIDTH + DOOR_HEIGHT * UP,
+                -1,
+                tex
+        );
+
+        //LEFT
+        drawRect(
+                hingeCorner,
+                hingeCorner + doorDepthDir * WALL_WIDTH,
+                hingeCorner + doorDepthDir * WALL_WIDTH + DOOR_HEIGHT * UP,
+                hingeCorner + DOOR_HEIGHT * UP,
+                1,
+                tex
+        );
+
+        //RIGHT
+        drawRect(
+                hingeCorner + doorWidthDir * DOOR_WIDTH,
+                hingeCorner + doorWidthDir * DOOR_WIDTH + doorDepthDir * WALL_WIDTH,
+                hingeCorner + doorWidthDir * DOOR_WIDTH + doorDepthDir * WALL_WIDTH + DOOR_HEIGHT * UP,
+                hingeCorner + doorWidthDir * DOOR_WIDTH + DOOR_HEIGHT * UP,
+                -1,
+                tex
+        );
+    }
+
+    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, float openingOffset, Direction doorDirection, std::vector<BoundingRectangle> *bounds, uint8_t texID) {
         glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
 
         glm::vec3 openingDir = glm::normalize(v1 - v0); //TODO
@@ -228,9 +272,14 @@ public:
         glm::vec3 ceilingOpeningV03 = openingV0 + openingUpDir * ROOM_CEILING_HEIGHT;
         glm::vec3 ceilingOpeningV12 = openingV1 + openingUpDir * ROOM_CEILING_HEIGHT;
 
-        drawRect(v0, openingV0, ceilingOpeningV03, v3, vecDir, color, texID);
-        drawRect(openingV3, openingV2, ceilingOpeningV12, ceilingOpeningV03, vecDir, color, texID);
-        drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, color, texID);
+        drawRect(v0, openingV0, ceilingOpeningV03, v3, vecDir, texID);
+
+        auto UVWidth = glm::length(openingV0 - v0) * WALL_TEXTURES_PER_PIXEL;
+        auto UVHeight = DOOR_HEIGHT * WALL_TEXTURES_PER_PIXEL;
+        drawRect(openingV3, openingV2, ceilingOpeningV12, ceilingOpeningV03, vecDir, texID, {UVWidth, UVHeight});
+
+        UVWidth += DOOR_HWIDTH*2 * WALL_TEXTURES_PER_PIXEL;
+        drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, texID, {UVWidth, 0});
 
         glm::vec3 bOffset = glm::vec3(-0.2, 0.0, 0.2);
         glm::vec3 tOffset = glm::vec3(0.2, 0.0, -0.2);
@@ -258,8 +307,15 @@ public:
                 rotType = glm::radians(90.0f);
             }
             openableDoors.push_back(
-                    OpenableDoor{openingV0, rotType, 0.0f, glm::radians(90.0f), glm::radians(90.0f), CLOSED,
-                                 CLOCKWISE});
+                    OpenableDoor{
+                        openingV0 + glm::vec3(doorDirection == EAST ? WALL_WIDTH / 2 : 0.0f, 0.0f, doorDirection == NORTH ? WALL_WIDTH / 2 : 0.0f),
+                        rotType,
+                        0.0f,
+                        glm::radians(90.0f),
+                        glm::radians(90.0f),
+                        CLOSED,
+                        CLOCKWISE
+                    });
         }
     }
 
@@ -309,14 +365,14 @@ inline std::vector<Room> generateFloorplan(float dimension) {
         if (static_cast<bool>(boolDistr(gen))) {
             std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomDepth - DOOR_HWIDTH);
 
-            currentX += roomWidth;
+            currentX += roomWidth + WALL_WIDTH;
             minWidth = MIN_DIMENSION;
             minDepth = distribution_door(gen);
             prevDoor = Door{minDepth, Direction::EAST};
         } else {
             std::uniform_real_distribution<float> distribution_door(0 + DOOR_HWIDTH, roomWidth - DOOR_HWIDTH);
 
-            currentY += roomDepth;
+            currentY += roomDepth + WALL_WIDTH;
             minWidth = distribution_door(gen);
             minDepth = MIN_DIMENSION;
             prevDoor = Door{minWidth, Direction::NORTH};
@@ -357,8 +413,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                 glm::vec3(room.startX + room.width, 0, room.startY),
                 glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                 glm::vec3(room.startX, 0, room.startY + room.depth),
-                -1,
-                color,
+                1,
                 floorTex
         );
 
@@ -367,8 +422,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                 glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
                 glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                 glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                1,
-                color,
+                -1,
                 ceilingTex
         );
 
@@ -430,7 +484,10 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                     glm::vec3(room.startX + room.width, 0, room.startY),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    1, color, offsetSouth, SOUTH, bounds,
+                    1,
+                    offsetSouth,
+                    SOUTH,
+                    bounds,
                     wallTex
             );
         } else {
@@ -439,7 +496,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                     glm::vec3(room.startX + room.width, 0, room.startY),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    1, color,
+                    1,
                     wallTex
             );
         }
@@ -450,16 +507,21 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    -1, color, offsetNorth, NORTH, bounds,
+                    -1,
+                    offsetNorth,
+                    NORTH,
+                    bounds,
                     wallTex
             );
+
+            storage.drawDoorFrame(glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, 0, room.startY + room.depth), NORTH, wallTex);
         } else {
             storage.drawRect(
                     glm::vec3(room.startX, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
-                    -1, color,
+                    -1,
                     wallTex
             );
         }
@@ -470,7 +532,10 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                     glm::vec3(room.startX, 0, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    -1, color, offsetWest, WEST, bounds,
+                    1,
+                    offsetWest,
+                    WEST,
+                    bounds,
                     wallTex
             );
         } else {
@@ -479,7 +544,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                     glm::vec3(room.startX, 0, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX, ROOM_CEILING_HEIGHT, room.startY),
-                    -1, color,
+                    1,
                     wallTex
             );
         }
@@ -490,16 +555,21 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                    1, color, offsetEast, EAST, bounds,
+                    -1,
+                    offsetEast,
+                    EAST,
+                    bounds,
                     wallTex
             );
+
+            storage.drawDoorFrame(glm::vec3(room.startX + room.width, 0, room.startY + offsetEast - DOOR_HWIDTH), EAST, wallTex);
         } else {
             storage.drawRect(
                     glm::vec3(room.startX + room.width, 0, room.startY),
                     glm::vec3(room.startX + room.width, 0, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY + room.depth),
                     glm::vec3(room.startX + room.width, ROOM_CEILING_HEIGHT, room.startY),
-                    1, color,
+                    -1,
                     wallTex
             );
         }
@@ -848,6 +918,7 @@ protected:
         PMesh.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         PMeshMultiTexture.init(this, &VMeshTexID, "shaders/ShaderVertMultiTexture.spv", "shaders/ShaderFragMultiTexture.spv", {&DSLGubo, &DSLMeshMultiTex});
+        PMeshMultiTexture.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
