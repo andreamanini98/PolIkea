@@ -151,6 +151,10 @@ struct OverlayUniformBlock {
     alignas(4) float visible;
 };
 
+struct OffscreenUniformBlock {
+    alignas(16) glm::mat4 depthMVP;
+};
+
 // The vertices data structures
 struct Vertex {
     glm::vec3 pos;
@@ -174,6 +178,10 @@ struct VertexVColor {
     glm::vec3 pos;
     glm::vec3 norm;
     glm::vec3 color;
+};
+
+struct OffscreenVertex {
+    glm::vec2 pos;
 };
 
 #define WALL_TEXTURES_PER_PIXEL (1.0f/4.0)
@@ -680,13 +688,13 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLOffscreen;
 
     // Vertex formats
-    VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced;
+    VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced, VOffscreen;
 
     // Pipelines [Shader couples]
-    Pipeline PMesh, PMeshMultiTexture, POverlay, PVertexWithColors, PMeshInstanced;
+    Pipeline PMesh, PMeshMultiTexture, POverlay, PVertexWithColors, PMeshInstanced, POffscreen;
 
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
@@ -697,13 +705,15 @@ protected:
     Model<VertexWithTextID> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
+    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSOffscreen;
     // Textures
     Texture TAsphalt, T2, T3, TPlankWall, TOverlayMoveObject;
     // C++ storage for uniform variables
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
+
+    OffscreenUniformBlock uboOffscreen;
 
     // Other application parameters
     // A vector containing one element for each model loaded where we want to keep track of its information
@@ -796,6 +806,10 @@ protected:
         // TODO may bring the DSLVertexWithColors to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
         DSLVertexWithColors.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
+        });
+
+        DSLOffscreen.init(this, {
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_VERTEX_BIT}
         });
 
         // Vertex descriptors
@@ -893,6 +907,13 @@ protected:
                                               sizeof(glm::vec3), COLOR}
                               });
 
+        VOffscreen.init(this, {
+                {0, sizeof(OffscreenVertex), VK_VERTEX_INPUT_RATE_VERTEX}
+        }, {
+              {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(OffscreenVertex, pos),
+                      sizeof(glm::vec3), POSITION},
+      });
+
         VMeshInstanced.init(this, {
                 {0, sizeof(Vertex),            VK_VERTEX_INPUT_RATE_VERTEX},
                 {1, sizeof(DoorModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
@@ -931,6 +952,7 @@ protected:
                             {&DSLGubo, &DSLDoor});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
+        POffscreen.init(this, &VOffscreen, "shaders/ShaderVertOffscreen.spv", {}, {&DSLOffscreen});
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
@@ -1035,6 +1057,7 @@ protected:
         POverlay.create();
         PVertexWithColors.create();
         PMeshInstanced.create();
+        POffscreen.createOffscreen();
 
         // Here you define the data set
         DSPolikeaExternFloor.init(this, &DSLMesh, {
@@ -1070,6 +1093,10 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
                 {1, TEXTURE, 0,                    &TPlankWall, 0},
                 {1, TEXTURE, 0,                    &TAsphalt, 1}
+        });
+
+        DSOffscreen.init(this, &DSLOffscreen, {
+                {0, UNIFORM, sizeof(OffscreenUniformBlock), nullptr}
         });
 
         for (auto &mInfo: MV) {
@@ -1215,6 +1242,16 @@ protected:
         DSDoor.bind(commandBuffer, PMeshInstanced, 1, currentImage);
         MDoor.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1, 0, 0, 0);
+    }
+
+    void updateUniformBufferOffscreen() {
+        // Matrix from light's point of view
+        glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(lightFOV), 1.0f, zNear, zFar);
+        glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0, 1, 0));
+        glm::mat4 depthModelMatrix = glm::mat4(1.0f);
+
+        uboOffscreen.depthMVP = depthProjectionMatrix * depthViewMatrix * depthModelMatrix;
+        DSOffscreen.map(0, &gubo, sizeof(gubo), 0); //TODO not ideal to have 3 of these
     }
 
     // Here is where you update the uniforms.

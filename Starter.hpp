@@ -43,6 +43,21 @@
 #include <sinfl.h>
 #include <nlohmann/json.hpp>
 
+#define VK_CHECK_RESULT(f)																				\
+{																										\
+	VkResult res = (f);																					\
+	if (res != VK_SUCCESS)																				\
+	{																									\
+		std::cout << "Fatal : VkResult is \"" << res << "\" in " << __FILE__ << " at line " << __LINE__ << "\n"; \
+		assert(res == VK_SUCCESS);																		\
+	}																									\
+}
+
+// 16 bits of depth is enough for such a small scene
+#define DEPTH_FORMAT VK_FORMAT_D16_UNORM
+#define SHADOWMAP_DIM 2048
+#define DEFAULT_SHADOWMAP_FILTER VK_FILTER_LINEAR
+
 using json = nlohmann::json;
 
 
@@ -329,6 +344,7 @@ struct Pipeline {
   			  std::vector<DescriptorSetLayout *> D);
   	void setAdvancedFeatures(VkCompareOp _compareOp, VkPolygonMode _polyModel,
  						VkCullModeFlagBits _CM, bool _transp);
+    void createOffscreen();
   	void create();
   	void destroy();
   	void bind(VkCommandBuffer commandBuffer);
@@ -475,6 +491,8 @@ protected:
 		createDepthResources();
 		createFramebuffers();
 		createDescriptorPool();
+
+		prepareOffscreenFramebuffer();
 
 		localInit();
 		pipelinesAndDescriptorSetsInit();
@@ -1057,6 +1075,169 @@ protected:
 		}
 		return imageView;
 	}
+
+    struct FrameBufferAttachment {
+        VkImage image;
+        VkDeviceMemory mem;
+        VkImageView view;
+    };
+    struct OffscreenPass {
+        int32_t width, height;
+        VkFramebuffer frameBuffer;
+        FrameBufferAttachment depth;
+        VkRenderPass renderPass;
+        VkSampler depthSampler;
+        VkDescriptorImageInfo descriptor;
+    } offscreenPass;
+
+    VkBool32 formatIsFilterable(VkPhysicalDevice physicalDevice, VkFormat format, VkImageTiling tiling)
+    {
+        VkFormatProperties formatProps;
+        vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &formatProps);
+
+        if (tiling == VK_IMAGE_TILING_OPTIMAL)
+            return formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+
+        if (tiling == VK_IMAGE_TILING_LINEAR)
+            return formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+
+        return false;
+    }
+
+    // Setup the offscreen framebuffer for rendering the scene from light's point-of-view to
+    // The depth attachment of this framebuffer will then be used to sample from in the fragment shader of the shadowing pass
+    void prepareOffscreenFramebuffer()
+    {
+        offscreenPass.width = SHADOWMAP_DIM;
+        offscreenPass.height = SHADOWMAP_DIM;
+
+        // For shadow mapping we only need a depth attachment
+        VkImageCreateInfo image {};
+        image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        image.imageType = VK_IMAGE_TYPE_2D;
+        image.extent.width = offscreenPass.width;
+        image.extent.height = offscreenPass.height;
+        image.extent.depth = 1;
+        image.mipLevels = 1;
+        image.arrayLayers = 1;
+        image.samples = VK_SAMPLE_COUNT_1_BIT;
+        image.tiling = VK_IMAGE_TILING_OPTIMAL;
+        image.format = DEPTH_FORMAT;																// Depth stencil attachment
+        image.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;		// We will sample directly from the depth attachment for the shadow mapping
+        VK_CHECK_RESULT(vkCreateImage(device, &image, nullptr, &offscreenPass.depth.image));
+
+        VkMemoryAllocateInfo memAlloc {};
+        memAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        VkMemoryRequirements memReqs;
+        vkGetImageMemoryRequirements(device, offscreenPass.depth.image, &memReqs);
+        memAlloc.allocationSize = memReqs.size;
+        memAlloc.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &offscreenPass.depth.mem));
+        VK_CHECK_RESULT(vkBindImageMemory(device, offscreenPass.depth.image, offscreenPass.depth.mem, 0));
+
+        VkImageViewCreateInfo depthStencilView {};
+        depthStencilView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        depthStencilView.format = DEPTH_FORMAT;
+        depthStencilView.subresourceRange = {};
+        depthStencilView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        depthStencilView.subresourceRange.baseMipLevel = 0;
+        depthStencilView.subresourceRange.levelCount = 1;
+        depthStencilView.subresourceRange.baseArrayLayer = 0;
+        depthStencilView.subresourceRange.layerCount = 1;
+        depthStencilView.image = offscreenPass.depth.image;
+        VK_CHECK_RESULT(vkCreateImageView(device, &depthStencilView, nullptr, &offscreenPass.depth.view));
+
+        // Create sampler to sample from to depth attachment
+        // Used to sample in the fragment shader for shadowed rendering
+        VkFilter shadowmap_filter = formatIsFilterable(physicalDevice, DEPTH_FORMAT, VK_IMAGE_TILING_OPTIMAL) ?
+                                    DEFAULT_SHADOWMAP_FILTER :
+                                    VK_FILTER_NEAREST;
+
+        VkSamplerCreateInfo sampler {};
+        sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler.maxAnisotropy = 1.0f;
+        sampler.magFilter = shadowmap_filter;
+        sampler.minFilter = shadowmap_filter;
+        sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        sampler.addressModeV = sampler.addressModeU;
+        sampler.addressModeW = sampler.addressModeU;
+        sampler.mipLodBias = 0.0f;
+        sampler.maxAnisotropy = 1.0f;
+        sampler.minLod = 0.0f;
+        sampler.maxLod = 1.0f;
+        sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+        VK_CHECK_RESULT(vkCreateSampler(device, &sampler, nullptr, &offscreenPass.depthSampler));
+
+        prepareOffscreenRenderpass();
+
+        // Create frame buffer
+        VkFramebufferCreateInfo fbufCreateInfo {};
+        fbufCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fbufCreateInfo.renderPass = offscreenPass.renderPass;
+        fbufCreateInfo.attachmentCount = 1;
+        fbufCreateInfo.pAttachments = &offscreenPass.depth.view;
+        fbufCreateInfo.width = offscreenPass.width;
+        fbufCreateInfo.height = offscreenPass.height;
+        fbufCreateInfo.layers = 1;
+
+        VK_CHECK_RESULT(vkCreateFramebuffer(device, &fbufCreateInfo, nullptr, &offscreenPass.frameBuffer));
+    }
+
+    // Set up a separate render pass for the offscreen frame buffer
+    // This is necessary as the offscreen frame buffer attachments use formats different to those from the example render pass
+    void prepareOffscreenRenderpass()
+    {
+        VkAttachmentDescription attachmentDescription{};
+        attachmentDescription.format = DEPTH_FORMAT;
+        attachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+        attachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;							// Clear depth at beginning of the render pass
+        attachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;						// We will read from depth, so it's important to store the depth attachment results
+        attachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;					// We don't care about initial layout of the attachment
+        attachmentDescription.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;// Attachment will be transitioned to shader read at render pass end
+
+        VkAttachmentReference depthReference = {};
+        depthReference.attachment = 0;
+        depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;			// Attachment will be used as depth/stencil during render pass
+
+        VkSubpassDescription subpass = {};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = 0;													// No color attachments
+        subpass.pDepthStencilAttachment = &depthReference;									// Reference to our depth attachment
+
+        // Use subpass dependencies for layout transitions
+        std::array<VkSubpassDependency, 2> dependencies;
+
+        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass = 0;
+        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        dependencies[0].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+        dependencies[1].srcSubpass = 0;
+        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[1].srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        dependencies[1].srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+        VkRenderPassCreateInfo renderPassCreateInfo {};
+        renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassCreateInfo.attachmentCount = 1;
+        renderPassCreateInfo.pAttachments = &attachmentDescription;
+        renderPassCreateInfo.subpassCount = 1;
+        renderPassCreateInfo.pSubpasses = &subpass;
+        renderPassCreateInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+        renderPassCreateInfo.pDependencies = dependencies.data();
+
+        VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &offscreenPass.renderPass));
+    }
 
     void createRenderPass() {
 		VkAttachmentDescription colorAttachmentResolve{};
@@ -1692,6 +1873,7 @@ protected:
 		}
 		imagesInFlight[imageIndex] = inFlightFences[currentFrame];
 
+		updateUniformBufferOffscreen();
 		updateUniformBuffer(imageIndex);
 
 		VkSubmitInfo submitInfo{};
@@ -1740,6 +1922,7 @@ protected:
     }
 
 	virtual void updateUniformBuffer(uint32_t currentImage) = 0;
+	virtual void updateUniformBufferOffscreen() = 0;
 
 	virtual void pipelinesAndDescriptorSetsCleanup() = 0;
 	virtual void localCleanup() = 0;
@@ -1800,6 +1983,18 @@ protected:
 	}
 
     void cleanup() {
+        // Frame buffer
+        vkDestroySampler(device, offscreenPass.depthSampler, nullptr);
+
+        // Depth attachment
+        vkDestroyImageView(device, offscreenPass.depth.view, nullptr);
+        vkDestroyImage(device, offscreenPass.depth.image, nullptr);
+        vkFreeMemory(device, offscreenPass.depth.mem, nullptr);
+
+        vkDestroyFramebuffer(device, offscreenPass.frameBuffer, nullptr);
+
+        vkDestroyRenderPass(device, offscreenPass.renderPass, nullptr);
+
 		cleanupSwapChain();
 
 		localCleanup();
@@ -2676,6 +2871,140 @@ void Pipeline::setAdvancedFeatures(VkCompareOp _compareOp, VkPolygonMode _polyMo
  	transp = _transp;
 }
 
+void Pipeline::createOffscreen() {
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+    vertShaderStageInfo.sType =
+    		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertShaderStageInfo.module = vertShaderModule;
+    vertShaderStageInfo.pName = "main";
+
+	//---
+	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo};
+
+	//---
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.sType =
+			VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	auto bindingDescription = VD->getBindingDescription();
+	auto attributeDescriptions = VD->getAttributeDescriptions();
+
+	vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(bindingDescription.size());
+	vertexInputInfo.vertexAttributeDescriptionCount =
+			static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexBindingDescriptions = bindingDescription.data();
+	vertexInputInfo.pVertexAttributeDescriptions =
+			attributeDescriptions.data();
+
+	//---
+	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+	inputAssembly.sType =
+		VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssembly.primitiveRestartEnable = VK_FALSE;
+	//---
+	VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = SHADOWMAP_DIM;
+	viewport.height = SHADOWMAP_DIM;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor{};
+	scissor.offset = {0, 0};
+	scissor.extent = BP->swapChainExtent;
+
+	VkPipelineViewportStateCreateInfo viewportState {};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.flags = 0;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+	//---
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType =
+			VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	rasterizer.polygonMode = polyModel;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = VK_CULL_MODE_NONE; //DIFF
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_TRUE; //DIFF
+
+	//---
+	VkPipelineMultisampleStateCreateInfo multisampling {};
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.flags = 0;
+
+	//---
+	VkPipelineColorBlendAttachmentState pipelineColorBlendAttachmentState {};
+	pipelineColorBlendAttachmentState.colorWriteMask = 0xf;
+	pipelineColorBlendAttachmentState.blendEnable = VK_FALSE;
+
+	VkPipelineColorBlendStateCreateInfo colorBlending {};
+	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlending.attachmentCount = 0;
+	colorBlending.pAttachments = &pipelineColorBlendAttachmentState;
+
+    //--
+    std::vector<VkDescriptorSetLayout> DSL(D.size());
+    for(int i = 0; i < D.size(); i++) {
+        DSL[i] = D[i]->descriptorSetLayout;
+    }
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType =
+            VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = DSL.size();
+    pipelineLayoutInfo.pSetLayouts = DSL.data();
+    pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+    pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+
+    VkResult result = vkCreatePipelineLayout(BP->device, &pipelineLayoutInfo, nullptr,
+                                             &pipelineLayout);
+    if (result != VK_SUCCESS) {
+        PrintVkError(result);
+        throw std::runtime_error("failed to create pipeline layout!");
+    }
+
+	//--
+	VkPipelineDepthStencilStateCreateInfo depthStencil{};
+	depthStencil.sType =
+			VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencil.depthTestEnable = VK_TRUE;
+	depthStencil.depthWriteEnable = VK_TRUE;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.minDepthBounds = 0.0f; // Optional
+	depthStencil.maxDepthBounds = 1.0f; // Optional
+	depthStencil.stencilTestEnable = VK_FALSE;
+	depthStencil.front = {}; // Optional
+	depthStencil.back = {}; // Optional
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType =
+			VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 1;
+	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pDepthStencilState = &depthStencil;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = nullptr; // Optional
+	pipelineInfo.layout = pipelineLayout;
+	pipelineInfo.renderPass = BP->renderPass;
+	pipelineInfo.subpass = 0;
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
+	pipelineInfo.basePipelineIndex = -1; // Optional
+}
 
 void Pipeline::create() {
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
