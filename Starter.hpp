@@ -252,6 +252,9 @@ template <class Vert, class Instance = Empty>
 class Model {
 	BaseProject *BP;
 
+    VkBuffer hackyBuffer;
+    VkDeviceMemory hackyBufferMemory;
+
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
 
@@ -278,6 +281,7 @@ class Model {
 	void initMesh(BaseProject *bp, VertexDescriptor *VD);
 	void cleanup();
   	void bind(VkCommandBuffer commandBuffer);
+    void bindHacky(VkCommandBuffer commandBuffer);
 };
 
 struct Texture {
@@ -329,6 +333,7 @@ struct Pipeline {
   	VkPipelineLayout pipelineLayout;
 
 	VkShaderModule vertShaderModule;
+    bool hasFragShaderModule = false;
 	VkShaderModule fragShaderModule;
 	std::vector<DescriptorSetLayout *> D;
 
@@ -353,13 +358,18 @@ struct Pipeline {
 	void cleanup();
 };
 
-enum DescriptorSetElementType {UNIFORM, TEXTURE};
+enum DescriptorSetElementType {UNIFORM, TEXTURE, SHADOW_MAP};
 
+struct Shadow {
+    VkImageView imageView;
+    VkSampler sampler;
+};
 struct DescriptorSetElement {
 	int binding;
 	DescriptorSetElementType type;
 	int size;
 	Texture *tex;
+    std::optional<Shadow> shadow = std::nullopt;
     int texDstArrayElement = 0;
 };
 
@@ -1752,7 +1762,12 @@ protected:
 		}
 	}
 
+    virtual void populateOffscreenCommandBuffer(VkCommandBuffer commandBuffer, int i) = 0;
 	virtual void populateCommandBuffer(VkCommandBuffer commandBuffer, int i) = 0;
+
+    float depthBiasConstant = 1.25f;
+    // Slope depth bias factor, applied depending on polygon's slope
+    float depthBiasSlope = 1.75f;
 
     void createCommandBuffers() {
     	commandBuffers.resize(swapChainFramebuffers.size());
@@ -1781,33 +1796,70 @@ protected:
 				throw std::runtime_error("failed to begin recording command buffer!");
 			}
 
-			VkRenderPassBeginInfo renderPassInfo{};
-			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-			renderPassInfo.renderPass = renderPass;
-			renderPassInfo.framebuffer = swapChainFramebuffers[i];
-			renderPassInfo.renderArea.offset = {0, 0};
-			renderPassInfo.renderArea.extent = swapChainExtent;
+            {
+                VkClearValue clearValues[2];
+                clearValues[0].depthStencil = { 1.0f, 0 };
 
-			std::array<VkClearValue, 2> clearValues{};
-			clearValues[0].color = initialBackgroundColor;
-			clearValues[1].depthStencil = {1.0f, 0};
+                VkRenderPassBeginInfo renderPassBeginInfo {};
+                renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                renderPassBeginInfo.renderPass = offscreenPass.renderPass;
+                renderPassBeginInfo.framebuffer = offscreenPass.frameBuffer;
+                renderPassBeginInfo.renderArea.extent.width = offscreenPass.width;
+                renderPassBeginInfo.renderArea.extent.height = offscreenPass.height;
+                renderPassBeginInfo.clearValueCount = 1;
+                renderPassBeginInfo.pClearValues = clearValues;
 
-			renderPassInfo.clearValueCount =
-							static_cast<uint32_t>(clearValues.size());
-			renderPassInfo.pClearValues = clearValues.data();
+                vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-			vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo,
-					VK_SUBPASS_CONTENTS_INLINE);
+                /*viewport = vks::initializers::viewport((float)offscreenPass.width, (float)offscreenPass.height, 0.0f, 1.0f);
+                vkCmdSetViewport(commandBuffers[i], 0, 1, &viewport);
+
+                scissor = vks::initializers::rect2D(offscreenPass.width, offscreenPass.height, 0, 0);
+                vkCmdSetScissor(commandBuffers[i], 0, 1, &scissor);*/
+
+                // Set depth bias (aka "Polygon offset")
+                // Required to avoid shadow mapping artifacts
+                vkCmdSetDepthBias(
+                    commandBuffers[i],
+                    depthBiasConstant,
+                    0.0f,
+                    depthBiasSlope
+                );
+
+                populateOffscreenCommandBuffer(commandBuffers[i], i);
+
+                vkCmdEndRenderPass(commandBuffers[i]);
+            }
+
+            {
+                VkRenderPassBeginInfo renderPassInfo{};
+                renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                renderPassInfo.renderPass = renderPass;
+                renderPassInfo.framebuffer = swapChainFramebuffers[i];
+                renderPassInfo.renderArea.offset = {0, 0};
+                renderPassInfo.renderArea.extent = swapChainExtent;
+
+                std::array<VkClearValue, 2> clearValues{};
+                clearValues[0].color = initialBackgroundColor;
+                clearValues[1].depthStencil = {1.0f, 0};
+
+                renderPassInfo.clearValueCount =
+                        static_cast<uint32_t>(clearValues.size());
+                renderPassInfo.pClearValues = clearValues.data();
+
+                vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo,
+                                     VK_SUBPASS_CONTENTS_INLINE);
 
 
-			populateCommandBuffer(commandBuffers[i], i);
+                populateCommandBuffer(commandBuffers[i], i);
 
 
-			vkCmdEndRenderPass(commandBuffers[i]);
+                vkCmdEndRenderPass(commandBuffers[i]);
+            }
 
-			if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
-				throw std::runtime_error("failed to record command buffer!");
-			}
+            if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
+                throw std::runtime_error("failed to record command buffer!");
+            }
 		}
 	}
 
@@ -1873,7 +1925,7 @@ protected:
 		}
 		imagesInFlight[imageIndex] = inFlightFences[currentFrame];
 
-		updateUniformBufferOffscreen();
+		updateUniformBufferOffscreen(imageIndex);
 		updateUniformBuffer(imageIndex);
 
 		VkSubmitInfo submitInfo{};
@@ -1922,7 +1974,7 @@ protected:
     }
 
 	virtual void updateUniformBuffer(uint32_t currentImage) = 0;
-	virtual void updateUniformBufferOffscreen() = 0;
+	virtual void updateUniformBufferOffscreen(uint32_t currentImage) = 0;
 
 	virtual void pipelinesAndDescriptorSetsCleanup() = 0;
 	virtual void localCleanup() = 0;
@@ -2597,6 +2649,23 @@ void Model<Vert, Instance>::createVertexBuffer() {
 	vkMapMemory(BP->device, vertexBufferMemory, 0, bufferSize, 0, &data);
 	memcpy(data, vertices.data(), (size_t) bufferSize);
 	vkUnmapMemory(BP->device, vertexBufferMemory);
+
+    if(VD->Position.hasIt) {
+        bufferSize = sizeof(glm::vec3) * vertices.size();
+
+        BP->createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                         hackyBuffer, hackyBufferMemory);
+
+        vkMapMemory(BP->device, hackyBufferMemory, 0, bufferSize, 0, &data);
+        for (int i = 0; i < vertices.size(); i++) {
+            glm::vec3 *o = (glm::vec3 *)((char*)(&vertices[i]) + VD->Position.offset);
+            memcpy((char*)data + i*sizeof(glm::vec3), o, sizeof(glm::vec3));
+        }
+        memcpy(data, vertices.data(), (size_t) bufferSize);
+        vkUnmapMemory(BP->device, hackyBufferMemory);
+    }
 }
 
 template <class Vert, class Instance>
@@ -2683,6 +2752,16 @@ void Model<Vert, Instance>::bind(VkCommandBuffer commandBuffer) {
 	// property .indexBuffer of models, contains the VkBuffer handle to its index buffer
 	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0,
 							VK_INDEX_TYPE_UINT32);
+}
+
+template <class Vert, class Instance>
+void Model<Vert, Instance>::bindHacky(VkCommandBuffer commandBuffer) {
+    VkBuffer vertexBuffers[] = {hackyBuffer};
+    // property .vertexBuffer of models, contains the VkBuffer handle to its vertex buffer
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    // property .indexBuffer of models, contains the VkBuffer handle to its index buffer
+    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 }
 
 
@@ -2844,16 +2923,19 @@ void Pipeline::init(BaseProject *bp, VertexDescriptor *vd,
 	VD = vd;
 
 	auto vertShaderCode = readFile(VertShader);
-	auto fragShaderCode = readFile(FragShader);
-	std::cout << "Vertex shader <" << VertShader << "> len: " <<
-				vertShaderCode.size() << "\n";
-	std::cout << "Fragment shader <" << FragShader << "> len: " <<
-				fragShaderCode.size() << "\n";
+    std::cout << "Vertex shader <" << VertShader << "> len: " <<
+              vertShaderCode.size() << "\n";
+    vertShaderModule =
+            createShaderModule(vertShaderCode);
+    if(!FragShader.empty()) {
+        auto fragShaderCode = readFile(FragShader);
+        std::cout << "Fragment shader <" << FragShader << "> len: " <<
+                  fragShaderCode.size() << "\n";
+        fragShaderModule =
+                createShaderModule(fragShaderCode);
+        hasFragShaderModule = true;
+    }
 
-	vertShaderModule =
-			createShaderModule(vertShaderCode);
-	fragShaderModule =
-			createShaderModule(fragShaderCode);
 
  	compareOp = VK_COMPARE_OP_LESS;
  	polyModel = VK_POLYGON_MODE_FILL;
@@ -3000,10 +3082,17 @@ void Pipeline::createOffscreen() {
 	pipelineInfo.pColorBlendState = &colorBlending;
 	pipelineInfo.pDynamicState = nullptr; // Optional
 	pipelineInfo.layout = pipelineLayout;
-	pipelineInfo.renderPass = BP->renderPass;
+	pipelineInfo.renderPass = BP->offscreenPass.renderPass;
 	pipelineInfo.subpass = 0;
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
 	pipelineInfo.basePipelineIndex = -1; // Optional
+
+    result = vkCreateGraphicsPipelines(BP->device, VK_NULL_HANDLE, 1,
+                                       &pipelineInfo, nullptr, &graphicsPipeline);
+    if (result != VK_SUCCESS) {
+        PrintVkError(result);
+        throw std::runtime_error("failed to create graphics pipeline!");
+    }
 }
 
 void Pipeline::create() {
@@ -3181,7 +3270,8 @@ void Pipeline::create() {
 }
 
 void Pipeline::destroy() {
-	vkDestroyShaderModule(BP->device, fragShaderModule, nullptr);
+    if(hasFragShaderModule)
+	    vkDestroyShaderModule(BP->device, fragShaderModule, nullptr);
 	vkDestroyShaderModule(BP->device, vertShaderModule, nullptr);
 }
 
@@ -3364,7 +3454,21 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 											VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 				descriptorWrites[j].descriptorCount = 1;
 				descriptorWrites[j].pImageInfo = &imageInfo[j];
-			}
+			} else if(E[j].type == SHADOW_MAP) {
+                imageInfo[j].imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+                imageInfo[j].sampler = E[j].tex->textureSampler;
+                imageInfo[j].imageView = E[j].tex->textureImageView;
+                imageInfo[j].imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+
+                descriptorWrites[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                descriptorWrites[j].dstSet = descriptorSets[i];
+                descriptorWrites[j].dstBinding = E[j].binding;
+                descriptorWrites[j].dstArrayElement = E[j].texDstArrayElement;
+                descriptorWrites[j].descriptorType =
+                        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                descriptorWrites[j].descriptorCount = 1;
+                descriptorWrites[j].pImageInfo = &imageInfo[j];
+            }
 		}
 		vkUpdateDescriptorSets(BP->device,
 						static_cast<uint32_t>(descriptorWrites.size()),

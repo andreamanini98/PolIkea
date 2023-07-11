@@ -180,10 +180,6 @@ struct VertexVColor {
     glm::vec3 color;
 };
 
-struct OffscreenVertex {
-    glm::vec2 pos;
-};
-
 #define WALL_TEXTURES_PER_PIXEL (1.0f/4.0)
 class VertexStorage {
     uint32_t vertexCurIdx = 0;
@@ -908,9 +904,9 @@ protected:
                               });
 
         VOffscreen.init(this, {
-                {0, sizeof(OffscreenVertex), VK_VERTEX_INPUT_RATE_VERTEX}
+                {0, sizeof(glm::vec3), VK_VERTEX_INPUT_RATE_VERTEX}
         }, {
-              {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(OffscreenVertex, pos),
+              {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0,
                       sizeof(glm::vec3), POSITION},
       });
 
@@ -1091,8 +1087,9 @@ protected:
 
         DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
-                {1, TEXTURE, 0,                    &TPlankWall, 0},
-                {1, TEXTURE, 0,                    &TAsphalt, 1}
+                {1, TEXTURE, 0,                    &TPlankWall, std::nullopt, 0},
+                {1, TEXTURE, 0,                    &TAsphalt, std::nullopt, 1},
+                {2, SHADOW_MAP, 0, nullptr, Shadow{offscreenPass.depth.view, offscreenPass.depthSampler}}
         });
 
         DSOffscreen.init(this, &DSLOffscreen, {
@@ -1172,6 +1169,25 @@ protected:
     // You send to the GPU all the objects you want to draw,
     // with their buffers and textures
 
+    void populateOffscreenCommandBuffer(VkCommandBuffer commandBuffer, int currentImage) {
+        POffscreen.bind(commandBuffer);
+        DSOffscreen.bind(commandBuffer, POffscreen, 0, currentImage);
+
+        MBuilding.bindHacky(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
+
+        MPolikeaExternFloor.bindHacky(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaExternFloor.indices.size()), 1, 0, 0, 0);
+
+        MFence.bindHacky(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFence.indices.size()), 1, 0, 0, 0);
+
+        for (auto &mInfo: MV) {
+            mInfo.model.bindHacky(commandBuffer);
+            vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
+        }
+    }
+
     void populateCommandBuffer(VkCommandBuffer commandBuffer, int currentImage) {
         // binds the pipeline
         // For a pipeline object, this command binds the corresponding pipeline to the command buffer passed in its parameter
@@ -1244,14 +1260,15 @@ protected:
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1, 0, 0, 0);
     }
 
-    void updateUniformBufferOffscreen() {
+    void updateUniformBufferOffscreen(uint32_t currentImage) {
         // Matrix from light's point of view
-        glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(lightFOV), 1.0f, zNear, zFar);
+        glm::vec3 lightPos(0.0f, 5.0f, 0.0f);
+        glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(45.0f), 1.0f, 1.0f, 96.0f);
         glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0, 1, 0));
         glm::mat4 depthModelMatrix = glm::mat4(1.0f);
 
         uboOffscreen.depthMVP = depthProjectionMatrix * depthViewMatrix * depthModelMatrix;
-        DSOffscreen.map(0, &gubo, sizeof(gubo), 0); //TODO not ideal to have 3 of these
+        DSOffscreen.map(currentImage, &uboOffscreen, sizeof(uboOffscreen), 0);
     }
 
     // Here is where you update the uniforms.
