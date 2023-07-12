@@ -7,17 +7,15 @@ layout(std140, set = 1, binding = 0) uniform UniformBufferObject {
 	float amb;
 	float gamma;
 	vec3 sColor;
-	mat4 mvpMat;
-	mat4 mMat;
-	mat4 nMat;
+	mat4 prjViewMat;
     vec4 door[N_ROOMS-1];
 } ubo;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNorm;
 layout(location = 2) in vec2 inUV;
-layout(location = 3) in vec3 instancePos;
-layout(location = 4) in float instanceRot;
+layout(location = 3) in float instanceRot;
+layout(location = 4) in vec3 shift;
 
 layout(location = 0) out vec3 fragPos;
 layout(location = 1) out vec3 fragNorm;
@@ -36,14 +34,22 @@ mat4 rotationMatrix(vec3 axis, float angle)
 				0.0,                                0.0,                                0.0,                                1.0);
 }
 
+mat4 shiftMatFun(vec3 shift)
+{
+	return mat4(1.0, 0.0, 0.0, shift.x,
+				0.0, 1.0, 0.0, shift.y,
+				0.0, 0.0, 1.0, shift.z,
+				0.0, 0.0, 0.0, 1.0);
+}
+
 void main() {
-		mat4 rotation = rotationMatrix(vec3(0.0, 1.0, 0.0), instanceRot + ubo.door[gl_InstanceIndex].x);
+	mat4 shiftMat = shiftMatFun(shift);
+	mat4 rotation = rotationMatrix(vec3(0.0, 1.0, 0.0), instanceRot + ubo.door[gl_InstanceIndex].x);
+	mat4 worldMat = shiftMat * rotation;
 
-		vec3 rotatedPosition = (rotation * vec4(inPosition, 1.0)).xyz;
-		vec3 rotatedNormal = (rotation * vec4(inNorm, 0.0)).xyz;
+	gl_Position = ubo.prjViewMat * worldMat * vec4(inPosition,1.0);
+	fragPos = (worldMat * vec4(inPosition,1.0)).xyz;
+	fragNorm = (inverse(worldMat) * vec4(inNorm, 0.0)).xyz;
 
-		gl_Position = ubo.mvpMat * vec4(rotatedPosition + instancePos, 1.0);
-		fragPos = (ubo.mMat * vec4(rotatedPosition + instancePos, 1.0)).xyz;
-		fragNorm = (ubo.nMat * vec4(rotatedNormal, 0.0)).xyz;
-		outUV = inUV;
+	outUV = inUV;
 }

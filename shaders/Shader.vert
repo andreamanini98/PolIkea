@@ -6,11 +6,9 @@ layout(set = 1, binding = 0) uniform UniformBufferObject {
 	float gamma;
 	vec3 sColor;
 	mat4 prjViewMat;
-	//mat4 mMat;
-	//mat4 nMat;
 } ubo;
 
-layout(set = 1, binding = 1) uniform UniformWorldBufferObject {
+layout(set = 1, binding = 2) uniform UniformWorldBufferObject {
 	mat4 worldMat;
 } uboWorld;
 
