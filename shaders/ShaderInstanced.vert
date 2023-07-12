@@ -43,13 +43,14 @@ mat4 shiftMatFun(vec3 shift)
 }
 
 void main() {
-	mat4 shiftMat = shiftMatFun(shift);
 	mat4 rotation = rotationMatrix(vec3(0.0, 1.0, 0.0), instanceRot + ubo.door[gl_InstanceIndex].x);
-	mat4 worldMat = shiftMat * rotation;
+	vec3 rotatedPosition = (rotation * vec4(inPosition, 1.0)).xyz;
+	vec3 rotatedNormal = (rotation * vec4(inNorm, 0.0)).xyz;
 
-	gl_Position = ubo.prjViewMat * worldMat * vec4(inPosition,1.0);
-	fragPos = (worldMat * vec4(inPosition,1.0)).xyz;
-	fragNorm = (inverse(worldMat) * vec4(inNorm, 0.0)).xyz;
+	gl_Position = ubo.prjViewMat * vec4(rotatedPosition + shift, 1.0);
+	fragPos = (vec4(rotatedPosition + shift, 1.0)).xyz;
+	fragNorm = (vec4(rotatedNormal, 0.0)).xyz;
+	outUV = inUV;
 
 	outUV = inUV;
 }
