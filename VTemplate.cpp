@@ -105,17 +105,13 @@ struct UniformBlock {
     alignas(4) float gamma;
     alignas(16) glm::vec3 sColor;
     alignas(16) glm::mat4 prjViewMat;
-    //alignas(16) glm::mat4 mMat;
-    //alignas(16) glm::mat4 nMat;
 };
 
 struct UniformBlockDoors {
     alignas(4) float amb;
     alignas(4) float gamma;
     alignas(16) glm::vec3 sColor;
-    alignas(16) glm::mat4 mvpMat;
-    alignas(16) glm::mat4 mMat;
-    alignas(16) glm::mat4 nMat;
+    alignas(16) glm::mat4 prjViewMat;
     alignas(16) glm::vec4 door[N_ROOMS - 1];
 };
 
@@ -636,6 +632,7 @@ struct ModelInfo {
     Model<Vertex> model;
     DescriptorSet dsModel;
     UniformBlock modelUBO{};
+    UniformBlockWorld uboWorldModel;
     glm::vec3 modelPos{};
     float modelRot = 0.0;
     bool hasBeenBought = false;
@@ -705,7 +702,7 @@ protected:
     // Textures
     Texture TAsphalt, T2, T3, TPlankWall, TOverlayMoveObject;
     // C++ storage for uniform variables
-    UniformBlockWorld uboWorldPolikea, uboWorldBuilding;
+    UniformBlockWorld uboWorldPolikea, uboWorldBuilding, uboWorldPolikeaExternFloor, uboWorldFence, uboWorldDoor;
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
@@ -769,6 +766,7 @@ protected:
                 //                  using the corresponding Vulkan constant
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
         });
         DSLMeshMultiTex.init(this, {
                 // This array contains the bindings:
@@ -790,6 +788,7 @@ protected:
                 //                  using the corresponding Vulkan constant
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
         });
         // TODO may bring the DSLGUBO to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
         DSLGubo.init(this, {
@@ -1052,11 +1051,13 @@ protected:
                 // third  element : only for UNIFORMS, the size of the corresponding C++ object. For texture, just put 0
                 // fourth element : only for TEXTURES, the pointer to the corresponding texture object. For uniforms, use nullptr
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
-                {1, TEXTURE, 0,                    &TAsphalt}
+                {1, TEXTURE, 0,                    &TAsphalt},
+                {2, UNIFORM, sizeof(UniformBlockWorld), nullptr}
         });
         DSFence.init(this, &DSLMesh, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
-                {1, TEXTURE, 0,                    &T3}
+                {1, TEXTURE, 0,                    &T3},
+                {2, UNIFORM, sizeof(UniformBlockWorld), nullptr}
         });
         DSGubo.init(this, &DSLGubo, {
                 {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr}
@@ -1071,20 +1072,22 @@ protected:
         });
         DSDoor.init(this, &DSLDoor, {
                 {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
-                {1, TEXTURE, 0,                         &T2}
+                {1, TEXTURE, 0,                         &T2},
+                {2, UNIFORM, sizeof(UniformBlockWorld), nullptr}
         });
 
         DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
-                {2, UNIFORM, sizeof(UniformBlockWorld), nullptr},
                 {1, TEXTURE, 0,                    &TPlankWall, 0},
                 {1, TEXTURE, 0,                    &TAsphalt, 1},
+                {2, UNIFORM, sizeof(UniformBlockWorld), nullptr}
         });
 
         for (auto &mInfo: MV) {
             mInfo.dsModel.init(this, &DSLMesh, {
                     {0, UNIFORM, sizeof(UniformBlock), nullptr},
-                    {1, TEXTURE, 0,                    &T2}
+                    {1, TEXTURE, 0,                    &T2},
+                    {2, UNIFORM, sizeof(UniformBlockWorld), nullptr}
             });
         }
     }
@@ -1426,17 +1429,19 @@ protected:
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
-        //glm::mat4 baseTr = glm::mat4(1.0f);
-        //glm::mat4 World = glm::scale(glm::mat4(1), glm::vec3(5.0f));
+
+        // TODO check slot number (secondo me è 0) and these basetr and world matrix (if we can get rid of them)
+
+        glm::mat4 baseTr = glm::mat4(1.0f);
+        glm::mat4 World = glm::scale(glm::mat4(1), glm::vec3(5.0f));
 
         uboWorldPolikea.worldMatrix = glm::translate(glm::mat4(1), polikeaBuildingPosition) * World;
-
         uboPolikea.amb = 0.05f;
         uboPolikea.gamma = 180.0f;
         uboPolikea.sColor = glm::vec3(1.0f);
         uboPolikea.prjViewMat = ViewPrj;
         DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
-        DSPolikeaBuilding.map(currentImage, &uboWorldPolikea, sizeof (uboWorldPolikea), 1);
+        DSPolikeaBuilding.map(currentImage, &uboWorldPolikea, sizeof (uboWorldPolikea), 0);
 
         //World = baseTr;
         uboWorldBuilding.worldMatrix = glm::mat4(1.0f);
@@ -1444,10 +1449,8 @@ protected:
         uboBuilding.gamma = 180.0f;
         uboBuilding.sColor = glm::vec3(1.0f);
         uboBuilding.prjViewMat = ViewPrj;
-        //uboBuilding.mMat = World;
-        //uboBuilding.nMat = glm::inverse(glm::transpose(World));
         DSBuilding.map(currentImage, &uboBuilding, sizeof(uboBuilding), 0);
-        DSBuilding.map(currentImage, &uboWorldBuilding, sizeof(uboWorldPolikea), 1);
+        DSBuilding.map(currentImage, &uboWorldBuilding, sizeof(uboWorldBuilding), 0);
 
         bool displayKey = false;
         for (std::size_t i = 1; i < MV.size(); ++i) {
@@ -1461,47 +1464,47 @@ protected:
         uboKey.visible = (OnlyMoveCam && displayKey) ? 1.0f : 0.0f;
         DSOverlayMoveOject.map(currentImage, &uboKey, sizeof(uboKey), 0);
 
+        uboWorldPolikeaExternFloor.worldMatrix = glm::mat4(1.0f);;
         uboPolikeaExternFloor.amb = 0.05f;
         uboPolikeaExternFloor.gamma = 180.0f;
         uboPolikeaExternFloor.sColor = glm::vec3(1.0f);
-        uboPolikeaExternFloor.mvpMat = ViewPrj * World;
-        uboPolikeaExternFloor.mMat = World;
-        uboPolikeaExternFloor.nMat = glm::inverse(glm::transpose(World));
+        uboPolikeaExternFloor.prjViewMat = ViewPrj;
         // the .map() method of a DataSet object, requires the current image of the swap chain as first parameter
         // the second parameter is the pointer to the C++ data structure to transfer to the GPU
         // the third parameter is its size
         // the fourth parameter is the location inside the descriptor set of this uniform block
         DSPolikeaExternFloor.map(currentImage, &uboPolikeaExternFloor, sizeof(uboPolikeaExternFloor), 0);
+        DSPolikeaExternFloor.map(currentImage, &uboWorldPolikeaExternFloor, sizeof(uboWorldPolikeaExternFloor), 0);
 
+        uboWorldFence.worldMatrix = glm::mat4(1.0f);;
         uboFence.amb = 0.05f;
         uboFence.gamma = 180.0f;
         uboFence.sColor = glm::vec3(1.0f);
-        uboFence.mvpMat = ViewPrj * World;
-        uboFence.mMat = World;
-        uboFence.nMat = glm::inverse(glm::transpose(World));
+        uboFence.prjViewMat = ViewPrj;
         DSFence.map(currentImage, &uboFence, sizeof(uboFence), 0);
+        DSFence.map(currentImage, &uboWorldFence, sizeof(uboWorldFence), 0);
 
-        World = baseTr;
+        //World = baseTr;
+        uboWorldDoor.worldMatrix = glm::mat4(1.0f);
         uboDoor.amb = 0.05f;
         uboDoor.gamma = 180.0f;
         uboDoor.sColor = glm::vec3(1.0f);
-        uboDoor.mvpMat = ViewPrj * World;
-        uboDoor.mMat = World;
-        uboDoor.nMat = glm::inverse(glm::transpose(World));
+        uboDoor.prjViewMat = ViewPrj;
         for (int i = 0; i < N_ROOMS - 1; i++) {
             uboDoor.door[i] = glm::vec4(doors[i].doorRot);
         }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
+        DSDoor.map(currentImage, &uboWorldDoor, sizeof(uboWorldDoor), 0);
 
         for (auto &mInfo: MV) {
             World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
+            mInfo.uboWorldModel.worldMatrix = World;
             mInfo.modelUBO.amb = 0.05f;
             mInfo.modelUBO.gamma = 180.0f;
             mInfo.modelUBO.sColor = glm::vec3(1.0f);
-            mInfo.modelUBO.mvpMat = ViewPrj * World;
-            mInfo.modelUBO.mMat = World;
-            mInfo.modelUBO.nMat = glm::inverse(glm::transpose(World));
+            mInfo.modelUBO.prjViewMat = ViewPrj;
             mInfo.dsModel.map(currentImage, &mInfo.modelUBO, sizeof(mInfo.modelUBO), 0);
+            mInfo.dsModel.map(currentImage, &mInfo.uboWorldModel, sizeof(mInfo.uboWorldModel), 0);
         }
     }
 };
