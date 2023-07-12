@@ -1173,12 +1173,15 @@ protected:
         POffscreen.bind(commandBuffer);
         DSOffscreen.bind(commandBuffer, POffscreen, 0, currentImage);
 
+        //TODO map bulding world
         MBuilding.bindHacky(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
 
+        //TODO map bulding world
         MPolikeaExternFloor.bindHacky(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaExternFloor.indices.size()), 1, 0, 0, 0);
 
+        //TODO map bulding world
         MFence.bindHacky(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFence.indices.size()), 1, 0, 0, 0);
 
@@ -1265,9 +1268,8 @@ protected:
         glm::vec3 lightPos(0.0f, 5.0f, 0.0f);
         glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(45.0f), 1.0f, 1.0f, 96.0f);
         glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0, 1, 0));
-        glm::mat4 depthModelMatrix = glm::mat4(1.0f);
 
-        uboOffscreen.depthMVP = depthProjectionMatrix * depthViewMatrix * depthModelMatrix;
+        uboOffscreen.depthMVP = depthProjectionMatrix * depthViewMatrix;
         DSOffscreen.map(currentImage, &uboOffscreen, sizeof(uboOffscreen), 0);
     }
 

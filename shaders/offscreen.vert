@@ -2,10 +2,15 @@
 
 layout (location = 0) in vec3 inPos;
 
-layout (binding = 0) uniform UBO
+layout (set = 0, binding = 0) uniform UBO
 {
-    mat4 depthMVP;
+    mat4 prjViewMat;
 } ubo;
+
+layout (set = 1, binding = 0) uniform UBOWorld
+{
+    mat4 worldMat;
+} uboWorld;
 
 out gl_PerVertex
 {
@@ -14,5 +19,5 @@ out gl_PerVertex
 
 void main()
 {
-    gl_Position =  ubo.depthMVP * vec4(inPos, 1.0);
+    gl_Position =  ubo.prjViewMat * uboWorld.worldMat * vec4(inPos, 1.0);
 }
