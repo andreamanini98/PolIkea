@@ -429,7 +429,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                                          room.startY + room.depth / 2);
         positionedLightPos->push_back(roomCenter);
         if (test == 0)
-            startingRoomCenter = roomCenter;
+            startingRoomCenter = roomCenter - glm::vec3(0.0f, ROOM_CEILING_HEIGHT, 0.0f);
 
         auto color = glm::vec3((test % 3) == 0, (test % 3) == 1, (test % 3) == 2);
 
