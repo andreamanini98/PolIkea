@@ -18,9 +18,8 @@
 namespace fs = std::filesystem;
 
 //REMEMBER TO UPDATE THIS FIELD ALSO IN THE ShaderInstanced.vert
-// TODO temporal solution: in ShaderInstanced.vert keep N_ROOMS greater than or equal to both N_ROOMS and N_POS_LIGHTS
 #define N_ROOMS 5
-#define N_POS_LIGHTS 4
+#define N_POS_LIGHTS (4 + 5) // 4 lights for polikea + one light for each room
 
 #define MIN_DIMENSION (12.5f)
 #define MAX_DIMENSION (18.0f)
@@ -59,6 +58,7 @@ enum Direction {
 struct DoorModelInstance {
     float baseRot;
     glm::vec3 pos;
+    float instanceType; // 0 == doors, 1 == lights
 };
 
 struct OpenableDoor {
@@ -129,6 +129,14 @@ struct UniformBlockDoors {
     alignas(16) glm::vec3 sColor;
     alignas(16) glm::mat4 prjViewMat;
     alignas(16) glm::vec4 door[N_ROOMS - 1];
+};
+
+struct UniformBlockPositionedLights {
+    alignas(4) float amb;
+    alignas(4) float gamma;
+    alignas(16) glm::vec3 sColor;
+    alignas(16) glm::mat4 prjViewMat;
+    alignas(16) glm::vec4 lights[N_POS_LIGHTS];
 };
 
 struct UniformBlockWorld {
@@ -406,7 +414,8 @@ inline std::vector<Room> generateFloorplan(float dimension) {
 
 inline glm::vec3
 floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithTextID> &vPos, std::vector<uint32_t> &vIdx,
-                      std::vector<OpenableDoor> &openableDoors, std::vector<BoundingRectangle> *bounds) {
+                      std::vector<OpenableDoor> &openableDoors, std::vector<BoundingRectangle> *bounds,
+                      std::vector<glm::vec3> *positionedLightPos) {
     VertexStorage storage(vPos, vIdx, openableDoors);
     int test = 0;
     glm::vec3 startingRoomCenter = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -416,10 +425,11 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
         int ceilingTex = 0;
         int wallTex = 0;
 
-        if (test == 0) {
-            startingRoomCenter.x = room.startX + room.width / 2;
-            startingRoomCenter.z = room.startY + room.depth / 2;
-        }
+        glm::vec3 roomCenter = glm::vec3(room.startX + room.width / 2, ROOM_CEILING_HEIGHT,
+                                         room.startY + room.depth / 2);
+        positionedLightPos->push_back(roomCenter);
+        if (test == 0)
+            startingRoomCenter = roomCenter;
 
         auto color = glm::vec3((test % 3) == 0, (test % 3) == 1, (test % 3) == 2);
 
@@ -741,6 +751,7 @@ protected:
     std::vector<glm::vec3> polikeaBuildingOffsets = getPolikeaBuildingOffsets();
     std::vector<BoundingRectangle> boundingRectangles = getBoundingRectangles(polikeaBuildingPosition, FRONTOFFSET,
                                                                               SIDEOFFSET, BACKOFFSET);
+    std::vector<glm::vec3> positionedLightPos = getPolikeaPositionedLightsPos();
 
     glm::vec3 CamPos = glm::vec3(2.0, 1.0, 3.45706);
     float CamAlpha = 0.0f;
@@ -752,7 +763,8 @@ protected:
 
     Model<Vertex, DoorModelInstance> MDoor, MPositionedLights;
     DescriptorSet DSDoor, DSPositionedLights;
-    UniformBlockDoors uboDoor, uboPositionedLights;
+    UniformBlockDoors uboDoor;
+    UniformBlockPositionedLights uboPositionedLights;
 
     std::vector<OpenableDoor> doors;
 
@@ -813,7 +825,8 @@ protected:
                 // third  element : the pipeline stage where it will be used
                 //                  using the corresponding Vulkan constant
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
-                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
+                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
         });
         // TODO may bring the DSLGUBO to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
         DSLGubo.init(this, {
@@ -929,15 +942,17 @@ protected:
                 {1, sizeof(DoorModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
         }, {
                                     {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
-                                                                                          sizeof(glm::vec3), POSITION},
+                                                                                               sizeof(glm::vec3), POSITION},
                                     {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, norm),
-                                                                                          sizeof(glm::vec3), NORMAL},
+                                                                                               sizeof(glm::vec3), NORMAL},
                                     {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
-                                                                                          sizeof(glm::vec2), UV},
+                                                                                               sizeof(glm::vec2), UV},
                                     {1, 3, VK_FORMAT_R32_SFLOAT,       offsetof(DoorModelInstance,
-                                                                                baseRot), sizeof(float),     OTHER},
+                                                                                baseRot),      sizeof(float),     OTHER},
                                     {1, 4, VK_FORMAT_R32G32B32_SFLOAT, offsetof(DoorModelInstance,
-                                                                                pos),     sizeof(glm::vec3), OTHER},
+                                                                                pos),          sizeof(glm::vec3), OTHER},
+                                    {1, 5, VK_FORMAT_R32_SFLOAT,       offsetof(DoorModelInstance,
+                                                                                instanceType), sizeof(float),     OTHER}
                             });
 
         // Pipelines [Shader couples]
@@ -987,7 +1002,7 @@ protected:
 
         auto floorplan = generateFloorplan(MAX_DIMENSION);
         startingRoomCenter = floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors,
-                                                   &boundingRectangles);
+                                                   &boundingRectangles, &positionedLightPos);
         MBuilding.initMesh(this, &VMeshTexID);
 
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
@@ -995,14 +1010,14 @@ protected:
         MDoor.instanceBufferPresent = true;
         MDoor.instances.reserve(doors.size());
         for (auto &door: doors) {
-            MDoor.instances.push_back({door.baseRot, door.doorPos});
+            MDoor.instances.push_back({door.baseRot, door.doorPos, 0});
         }
         MDoor.init(this, &VMeshInstanced, "models/door_009_Mesh.112.mgcg", MGCG);
 
         MPositionedLights.instanceBufferPresent = true;
         MPositionedLights.instances.reserve(N_POS_LIGHTS);
         for (int i = 0; i < N_POS_LIGHTS; i++) {
-            MPositionedLights.instances.push_back({0.0f, getPolikeaPositionedLightsPos()[i]});
+            MPositionedLights.instances.push_back({0.0f, positionedLightPos[i], 1});
         }
         MPositionedLights.init(this, &VMeshInstanced, "models/lights/polilamp.mgcg", MGCG);
 
@@ -1108,8 +1123,8 @@ protected:
                 {1, TEXTURE, 0,                         &T2}
         });
         DSPositionedLights.init(this, &DSLDoor, {
-                {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
-                {1, TEXTURE, 0,                         &T2}
+                {2, UNIFORM, sizeof(UniformBlockPositionedLights), nullptr},
+                {1, TEXTURE, 0,                                    &T2}
         });
         DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock),      nullptr},
@@ -1471,7 +1486,7 @@ protected:
                 gubo.pointLights[indexPoint].beta = light.parameters.point.beta;
                 gubo.pointLights[indexPoint].g = light.parameters.point.g;
                 gubo.pointLights[indexPoint].lightPos =
-                        glm::vec3(glm::vec4(light.position, 1.0f)) + getPolikeaPositionedLightsPos()[i];
+                        glm::vec3(glm::vec4(light.position, 1.0f)) + positionedLightPos[i];
                 gubo.pointLights[indexPoint].lightColor = glm::vec4(light.lightColor, 1.0f);
                 indexPoint++;
             }
@@ -1549,7 +1564,7 @@ protected:
         uboPositionedLights.sColor = glm::vec3(1.0f);
         uboPositionedLights.prjViewMat = ViewPrj;
         for (int i = 0; i < N_POS_LIGHTS; i++) {
-            uboPositionedLights.door[i] = glm::vec4(0.0f);
+            uboPositionedLights.lights[i] = glm::vec4(0.0f);
         }
         DSPositionedLights.map(currentImage, &uboPositionedLights, sizeof(uboPositionedLights), 0);
 
