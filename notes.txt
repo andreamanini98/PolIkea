@@ -1,0 +1,91 @@
+APPUNTI GENERALI (non crederci più di tanto)
+----------------
+
+Linea 236 empty usata come default.
+Ha fatto le robe delle istanze per colpa del rot.
+
+Shaderinstancevert vedi come passa instance rot e instance pos.
+Okkio al nuovo vertex descriptor.
+
+Linea 525 motivo di aggiunta guarda linea 55 dello shadermultitexture.
+In quello shader l'accesso è a runtime, la variabile texid cambia.
+Linea runtimedescryptorarray è a true per quello.
+Linea 50 dello shader, Tex non ha dimensione, la setta lui nel codice.
+
+Nel commit progress? MacOS nella repo del tipo.
+
+Poiflag per il multitexture: se questo descriptor set layout ha più texture mappate, se ce le ha mi metto a true questa flag. Il vettore descriprorbindingflags contiene le flag. Serie di flag in cui c'è scritto quale dei binding è variabile. Per dire a vulkan quali sono i binding che hanno grandezza variabile a runtime.
+
+Linea 2979 texturedynamicsize > 1 = ho texture variabili
+Il descriptor set contiene quante texture
+
+Linea 2997 guarda documentazione 
+
+5.0f, 0.0f, -15.0f
+
+
+
+COMMIT DECRYPTED MODELS
+-----------------------
+
+Semplicemente lo usa per scrivere il file decriptato.
+
+
+
+COMMIT LIGHTS
+-------------
+
+Linea 220: informazione per contenere le luci nel model.
+Linea 2088: metodo per caricare le luci in automatico (poi lo convertirà in un parsing di file json). Leggiti come lo implementa è facile da capire.
+
+
+
+COMMIT MORE PARAMETERS ON LIGHTS
+--------------------------------
+
+Linea 209: insieme di struct per contenere i parametri caricati delle luci. Ha cambiato in linea 245 l'attributo lights.
+Linea 2123: è sempre il metodo per caricare in automatico i parametri delle luci.
+
+
+
+COMMIT MORE PARAMETERS ON LIGHTS (json)
+---------------------------------------
+
+Linea 2120: ora i parametri delle luci vengono caricati da dei file json.
+
+
+
+COMMIT INSTANCE RENDERING ATTEMPT
+---------------------------------
+
+Ha reso il model un template anche di una classe istanza (empty è usata come un placeholder in caso non ci siano istanze multiple). Questo è stato fatto per agevolare il passaggio di instanceRot e shift (guarda lo shader ShaderInstanced.vert).
+Si crea quindi un nuovo buffer (come il vertexBuffer) per contenere tutte le istanze del caso.
+I metodi del model sono stati adattati di conseguenza.
+Okkio alla linea 1948!!
+
+Linea 2373: deve creare l'instance buffer come fatto ad esempio per il vertex buffer, più sotto dovrà anche distruggerlo.
+
+Linea 2446: devo ancora vedere come mai mette 1 e 1 nel vkCmdBindVertexBuffers.
+
+
+
+COMMIT DYNAMIC TEX
+------------------
+
+Linea 299: serve per dire al descriptor set layout quanti elementi (texture multiple) utilizzare.
+Linea 347: l'indice usato per ripescare la texture nel VTemplate.
+
+Per un esempio di come li utilizza guarda come esegue l'init di DSLMeshMultiTex e DSBuilding.
+
+Linea 525: lo fa perché nello shader ShaderMultiTexture usa questo texture(tex[nonuniformEXT(fragTextureID)], fragUV).rgb; ossia la variabile texID cambia a runtime .
+
+Linea 885-886 descrive quali sono le feature supportate dall'implementazione. Ad esempio shaderSampledImageArrayDynamicIndexing dice se gli array di sampler o le sampled images possono essere indicizzate dinamicamente negli shader (come infatti è stato fatto in precedenza).
+
+
+
+COMMIT PROGRESS?
+----------------
+
+Linea 2902: se ho un descriptor che ha più texture, metto il POIFlag a true (ad esempio in VTemplate succede quando inizializza DSLMeshMultiTex.
+
+Sotto vedi l'if che viene eseguito se POIFlag è vero. Forse serve per settare parametri in quanto nello shader abbiamo layout(set = 1, binding = 2) uniform sampler2D tex[].
