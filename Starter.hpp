@@ -231,6 +231,7 @@ struct LightParameters {
         PointLightParameters point;
         SpotLightParameters spot;
     } parameters;
+    bool lightInPolikea;
 };
 class Empty {};
 template <class Vert, class Instance = Empty>
@@ -2154,7 +2155,15 @@ void Model<Vert, Instance>::loadModelGLTF(std::string file, bool encoded) {
 	tinygltf::TinyGLTF loader;
 	std::string warn, err;
 
+    bool lInPolikea = false;
+
     std::string lightFile = "lights/" + file.substr(0, file.length() - 4) + "lights";
+
+    if (static_cast<std::string>(file).find("polilamp") != std::string::npos) {
+        lInPolikea = true;
+        lightFile = "lights/models/lights/polilamp.lights";
+    }
+
     std::ifstream lightsStream(lightFile);
     std::string line;
     if(lightsStream.good()) {
@@ -2182,6 +2191,8 @@ void Model<Vert, Instance>::loadModelGLTF(std::string file, bool encoded) {
                 parameters.type = LightType::POINT;
                 parameters.parameters.point = PointLightParameters { point["g"], point["beta"] };
             }
+
+            parameters.lightInPolikea = lInPolikea;
 
             lights.push_back(parameters);
         }

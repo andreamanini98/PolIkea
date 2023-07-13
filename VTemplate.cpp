@@ -17,20 +17,20 @@
 
 namespace fs = std::filesystem;
 
-namespace std {
-    template<>
-    struct hash<glm::vec3> {
-        size_t operator()(const glm::vec3 &t) const {
-            // Calculate the hash using the member variables
-            size_t seed = 0;
-            hash<float> hasher;
-            seed ^= hasher(t.x) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-            seed ^= hasher(t.y) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-            seed ^= hasher(t.z) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-            return seed;
-        }
-    };
-}
+//namespace std {
+//    template<>
+//    struct hash<glm::vec3> {
+//        size_t operator()(const glm::vec3 &t) const {
+//            // Calculate the hash using the member variables
+//            size_t seed = 0;
+//            hash<float> hasher;
+//            seed ^= hasher(t.x) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+//            seed ^= hasher(t.y) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+//            seed ^= hasher(t.z) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+//            return seed;
+//        }
+//    };
+//}
 
 //REMEMBER TO UPDATE THIS FIELD ALSO IN THE ShaderInstanced.vert
 #define N_ROOMS 6
@@ -42,6 +42,9 @@ namespace std {
 
 #define ROOM_CEILING_HEIGHT 3.0f
 #define DOOR_HEIGHT 2.5f
+
+
+// ----- ENUM ----- //
 
 enum DoorState {
     OPEN,
@@ -56,8 +59,23 @@ enum DoorOpeningDirection {
     COUNTERCLOCKWISE
 };
 
+enum Direction {
+    NORTH,
+    EAST,
+    SOUTH,
+    WEST
+};
+
+
+// ----- GENERIC STRUCT ----- //
+
 struct DoorModelInstance {
     float baseRot;
+    glm::vec3 pos;
+};
+
+
+struct PositionedLightInstance {
     glm::vec3 pos;
 };
 
@@ -72,13 +90,6 @@ struct OpenableDoor {
     DoorOpeningDirection doorOpeningDirection;
 };
 
-enum Direction {
-    NORTH,
-    EAST,
-    SOUTH,
-    WEST
-};
-
 struct Door {
     float offset;
     Direction direction;
@@ -91,6 +102,29 @@ struct Room {
     float depth;
     std::vector<Door> doors;
 };
+
+
+// ----- LIGHT STRUCT ----- //
+
+struct SpotLight {
+    alignas(4) float beta;   // decay exponent of the spotlight
+    alignas(4) float g;      // target distance of the spotlight
+    alignas(4) float cosout; // cosine of the outer angle of the spotlight
+    alignas(4) float cosin;  // cosine of the inner angle of the spotlight
+    alignas(16) glm::vec3 lightPos;
+    alignas(16) glm::vec3 lightDir;
+    alignas(16) glm::vec4 lightColor;
+};
+
+struct PointLight {
+    alignas(4) float beta;   // decay exponent of the spotlight
+    alignas(4) float g;      // target distance of the spotlight
+    alignas(16) glm::vec3 lightPos;
+    alignas(16) glm::vec4 lightColor;
+};
+
+
+// ----- UNIFORM BUFFERS STRUCT ----- //
 
 // The uniform buffer objects data structures
 // Remember to use the correct alignas(...) value
@@ -115,25 +149,10 @@ struct UniformBlockDoors {
     alignas(16) glm::vec4 door[N_ROOMS - 1];
 };
 
+
+
 struct UniformBlockWorld {
     alignas(16) glm::mat4 worldMatrix;
-};
-
-struct SpotLight {
-    alignas(4) float beta;   // decay exponent of the spotlight
-    alignas(4) float g;      // target distance of the spotlight
-    alignas(4) float cosout; // cosine of the outer angle of the spotlight
-    alignas(4) float cosin;  // cosine of the inner angle of the spotlight
-    alignas(16) glm::vec3 lightPos;
-    alignas(16) glm::vec3 lightDir;
-    alignas(16) glm::vec4 lightColor;
-};
-
-struct PointLight {
-    alignas(4) float beta;   // decay exponent of the spotlight
-    alignas(4) float g;      // target distance of the spotlight
-    alignas(16) glm::vec3 lightPos;
-    alignas(16) glm::vec4 lightColor;
 };
 
 struct GlobalUniformBlock {
@@ -151,7 +170,9 @@ struct OverlayUniformBlock {
     alignas(4) float visible;
 };
 
-// The vertices data structures
+
+// ----- VERTEX STRUCT ----- //
+
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 norm;
@@ -176,7 +197,11 @@ struct VertexVColor {
     glm::vec3 color;
 };
 
+
+// ----- HOME GENERATION ----- //
+
 #define WALL_TEXTURES_PER_PIXEL (1.0f/4.0)
+
 class VertexStorage {
     uint32_t vertexCurIdx = 0;
     std::vector<VertexWithTextID> &vPos;
@@ -194,14 +219,18 @@ public:
         return vertexCurIdx++;
     }
 
-    void drawRect(glm::vec3 bottomLeft, glm::vec3 bottomRight, glm::vec3 topRight, glm::vec3 topLeft, int vecDir, uint8_t texID, glm::vec2 uvOffset = glm::vec2(0.0f, 0.0f)) {
+    void drawRect(glm::vec3 bottomLeft, glm::vec3 bottomRight, glm::vec3 topRight, glm::vec3 topLeft, int vecDir,
+                  uint8_t texID, glm::vec2 uvOffset = glm::vec2(0.0f, 0.0f)) {
         auto width = glm::length(bottomRight - bottomLeft);
         auto height = glm::length(topLeft - bottomLeft);
 
-        glm::vec3 norm = glm::abs(glm::normalize(glm::cross(bottomRight - bottomLeft, topRight - bottomLeft))) * (vecDir > 0 ? 1.0f : -1.0f);
+        glm::vec3 norm = glm::abs(glm::normalize(glm::cross(bottomRight - bottomLeft, topRight - bottomLeft))) *
+                         (vecDir > 0 ? 1.0f : -1.0f);
         auto i0 = addVertex({bottomLeft, norm, glm::vec2{0.0f, 0.0f} + uvOffset, texID});
         auto i1 = addVertex({bottomRight, norm, glm::vec2{width * WALL_TEXTURES_PER_PIXEL, 0.0f} + uvOffset, texID});
-        auto i2 = addVertex({topRight, norm, glm::vec2{width * WALL_TEXTURES_PER_PIXEL, height * WALL_TEXTURES_PER_PIXEL} + uvOffset, texID});
+        auto i2 = addVertex({topRight, norm,
+                             glm::vec2{width * WALL_TEXTURES_PER_PIXEL, height * WALL_TEXTURES_PER_PIXEL} + uvOffset,
+                             texID});
         auto i3 = addVertex({topLeft, norm, glm::vec2{0.0f, height * WALL_TEXTURES_PER_PIXEL} + uvOffset, texID});
 
         //printf("%d %d %d %d\n", i0, i1, i2, i3);
@@ -212,18 +241,22 @@ public:
 
     void drawDoorFrame(glm::vec3 hingeCorner, Direction doorDirection, uint8_t tex) {
         glm::vec3 UP = glm::vec3(0.0f, 1.0f, 0.0f);
-        glm::vec3 doorWidthDir = doorDirection == Direction::NORTH || doorDirection == Direction::SOUTH ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 0.0f, 1.0f);
-        glm::vec3 doorDepthDir = doorDirection == Direction::NORTH || doorDirection == Direction::SOUTH ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+        glm::vec3 doorWidthDir =
+                doorDirection == Direction::NORTH || doorDirection == Direction::SOUTH ? glm::vec3(1.0f, 0.0f, 0.0f)
+                                                                                       : glm::vec3(0.0f, 0.0f, 1.0f);
+        glm::vec3 doorDepthDir =
+                doorDirection == Direction::NORTH || doorDirection == Direction::SOUTH ? glm::vec3(0.0f, 0.0f, 1.0f)
+                                                                                       : glm::vec3(1.0f, 0.0f, 0.0f);
 
         //glm::vec3 hingeCorner = base - doorWidthDir * DOOR_HWIDTH;
-        float DOOR_WIDTH = 2*DOOR_HWIDTH;
+        float DOOR_WIDTH = 2 * DOOR_HWIDTH;
 
         //TOP
         drawRect(
-                 hingeCorner,
+                hingeCorner,
                 hingeCorner + doorWidthDir * DOOR_WIDTH,
-                   hingeCorner + doorWidthDir * DOOR_WIDTH + doorDepthDir * WALL_WIDTH,
-                    hingeCorner                             + doorDepthDir * WALL_WIDTH,
+                hingeCorner + doorWidthDir * DOOR_WIDTH + doorDepthDir * WALL_WIDTH,
+                hingeCorner + doorDepthDir * WALL_WIDTH,
                 1,
                 tex
         );
@@ -259,7 +292,8 @@ public:
         );
     }
 
-    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, float openingOffset, Direction doorDirection, std::vector<BoundingRectangle> *bounds, uint8_t texID) {
+    void drawRectWithOpening(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, int vecDir, float openingOffset,
+                             Direction doorDirection, std::vector<BoundingRectangle> *bounds, uint8_t texID) {
         glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v2 - v0)) * (vecDir > 0 ? 1.0f : -1.0f);
 
         glm::vec3 openingDir = glm::normalize(v1 - v0); //TODO
@@ -278,7 +312,7 @@ public:
         auto UVHeight = DOOR_HEIGHT * WALL_TEXTURES_PER_PIXEL;
         drawRect(openingV3, openingV2, ceilingOpeningV12, ceilingOpeningV03, vecDir, texID, {UVWidth, UVHeight});
 
-        UVWidth += DOOR_HWIDTH*2 * WALL_TEXTURES_PER_PIXEL;
+        UVWidth += DOOR_HWIDTH * 2 * WALL_TEXTURES_PER_PIXEL;
         drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, texID, {UVWidth, 0});
 
         glm::vec3 bOffset = glm::vec3(-0.2, 0.0, 0.2);
@@ -308,13 +342,14 @@ public:
             }
             openableDoors.push_back(
                     OpenableDoor{
-                        openingV0 + glm::vec3(doorDirection == EAST ? WALL_WIDTH / 2 : 0.0f, 0.0f, doorDirection == NORTH ? WALL_WIDTH / 2 : 0.0f),
-                        rotType,
-                        0.0f,
-                        glm::radians(90.0f),
-                        glm::radians(90.0f),
-                        CLOSED,
-                        CLOCKWISE
+                            openingV0 + glm::vec3(doorDirection == EAST ? WALL_WIDTH / 2 : 0.0f, 0.0f,
+                                                  doorDirection == NORTH ? WALL_WIDTH / 2 : 0.0f),
+                            rotType,
+                            0.0f,
+                            glm::radians(90.0f),
+                            glm::radians(90.0f),
+                            CLOSED,
+                            CLOCKWISE
                     });
         }
     }
@@ -514,7 +549,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                     wallTex
             );
 
-            storage.drawDoorFrame(glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, 0, room.startY + room.depth), NORTH, wallTex);
+            storage.drawDoorFrame(glm::vec3(room.startX + offsetNorth - DOOR_HWIDTH, 0, room.startY + room.depth),
+                                  NORTH, wallTex);
         } else {
             storage.drawRect(
                     glm::vec3(room.startX, 0, room.startY + room.depth),
@@ -562,7 +598,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
                     wallTex
             );
 
-            storage.drawDoorFrame(glm::vec3(room.startX + room.width, 0, room.startY + offsetEast - DOOR_HWIDTH), EAST, wallTex);
+            storage.drawDoorFrame(glm::vec3(room.startX + room.width, 0, room.startY + offsetEast - DOOR_HWIDTH), EAST,
+                                  wallTex);
         } else {
             storage.drawRect(
                     glm::vec3(room.startX + room.width, 0, room.startY),
@@ -581,7 +618,9 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
 }
 
 
-inline void insertRectVertices(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 norm, std::vector<Vertex> *vPos, float aspect_ratio) {
+inline void
+insertRectVertices(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 norm, std::vector<Vertex> *vPos,
+                   float aspect_ratio) {
     float repeat_x = glm::abs(glm::distance(v0, v1)) / (8.0f);
     float repeat_y = glm::abs(glm::distance(v2, v1)) / (8.0f * aspect_ratio);
 
@@ -592,9 +631,10 @@ inline void insertRectVertices(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::ve
 }
 
 #define FENCE_ASPECT_RATIO (1333.0f/2000.0f)
+
 inline void initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector<uint32_t> *vIdxGround,
-                        std::vector<Vertex> *vPosFence, std::vector<uint32_t> *vIdxFence,
-                        glm::vec3 polikeaPos, float frontOffset, float sideOffset, float backOffset) {
+                                    std::vector<Vertex> *vPosFence, std::vector<uint32_t> *vIdxFence,
+                                    glm::vec3 polikeaPos, float frontOffset, float sideOffset, float backOffset) {
     // Vertices of the ground as seen from a top view
     glm::vec3 bottomLeft = polikeaPos + glm::vec3(-sideOffset, 0.0f, frontOffset);
     glm::vec3 topLeft = polikeaPos + glm::vec3(-sideOffset, 0.0f, -backOffset);
@@ -611,10 +651,13 @@ inline void initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector
     vIdxGround->push_back(3);
 
     // TODO CHECK THESE NORMALS
-    insertRectVertices(bottomLeft, topLeft, topLeft + h, bottomLeft + h, {1.0f, 0.0f, 0.0f}, vPosFence, FENCE_ASPECT_RATIO);
+    insertRectVertices(bottomLeft, topLeft, topLeft + h, bottomLeft + h, {1.0f, 0.0f, 0.0f}, vPosFence,
+                       FENCE_ASPECT_RATIO);
     insertRectVertices(topLeft, topRight, topRight + h, topLeft + h, {0.0f, 0.0f, 1.0f}, vPosFence, FENCE_ASPECT_RATIO);
-    insertRectVertices(topRight, bottomRight, bottomRight + h, topRight + h, {-1.0f, 0.0f, 0.0f}, vPosFence, FENCE_ASPECT_RATIO);
-    insertRectVertices(bottomRight, bottomLeft, bottomLeft + h, bottomRight + h, {0.0f, 0.0f, -1.0f}, vPosFence, FENCE_ASPECT_RATIO);
+    insertRectVertices(topRight, bottomRight, bottomRight + h, topRight + h, {-1.0f, 0.0f, 0.0f}, vPosFence,
+                       FENCE_ASPECT_RATIO);
+    insertRectVertices(bottomRight, bottomLeft, bottomLeft + h, bottomRight + h, {0.0f, 0.0f, -1.0f}, vPosFence,
+                       FENCE_ASPECT_RATIO);
 
     for (int i = 0; i < 4; i++) {
         vIdxFence->push_back(i * 4 + 0);
@@ -626,6 +669,8 @@ inline void initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector
     }
 }
 
+
+// ----- MODEL INFO STRUCT ----- //
 
 // Struct used to store data related to a model
 struct ModelInfo {
@@ -673,7 +718,8 @@ struct ModelInfo {
 };
 
 
-// MAIN !
+// ----- MAIN ----- //
+
 class VTemplate : public BaseProject {
 protected:
 
@@ -727,6 +773,8 @@ protected:
     Model<Vertex, DoorModelInstance> MDoor;
     DescriptorSet DSDoor;
     UniformBlockDoors uboDoor;
+    Model<Vertex, PositionedLightInstance> MPositionedLight;
+    DescriptorSet DSPositioinedLight;
 
     std::vector<OpenableDoor> doors;
 
@@ -848,35 +896,35 @@ protected:
                 //                  using the corresponding Vulkan constant
                 {0, sizeof(VertexWithTextID), VK_VERTEX_INPUT_RATE_VERTEX}
         }, {
-                           // This array contains the location:
-                           // first  element : the binding number
-                           // second element : the location number
-                           // third  element : the offset of this element in the memory record
-                           // fourth element : the data type of the element
-                           //                  using the corresponding Vulkan constant
-                           // fifth  element : the size in byte of the element
-                           // sixth  element : a constant defining the element usage
-                           //                   POSITION - a vec3 with the position
-                           //                   NORMAL   - a vec3 with the normal vector
-                           //                   UV       - a vec2 with a UV coordinate
-                           //                   COLOR    - a vec4 with a RGBA color
-                           //                   TANGENT  - a vec4 with the tangent vector
-                           //                   OTHER    - anything else
-                           //
-                           // ***************** DOUBLE CHECK ********************
-                           //  That the Vertex data structure you use in the "offsetoff" and
-                           //	in the "sizeof" in the previous array, refers to the correct one,
-                           //	if you have more than one vertex format!
-                           // ***************************************************
-                           {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexWithTextID, pos),
-                                   sizeof(glm::vec3), POSITION},
-                           {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexWithTextID, norm),
-                                   sizeof(glm::vec3), NORMAL},
-                           {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(VertexWithTextID, UV),
-                                   sizeof(glm::vec2), UV},
-                           {0, 3, VK_FORMAT_R8_UINT,    offsetof(VertexWithTextID, texID),
-                                   sizeof(uint8_t), OTHER},
-                   });
+                                // This array contains the location:
+                                // first  element : the binding number
+                                // second element : the location number
+                                // third  element : the offset of this element in the memory record
+                                // fourth element : the data type of the element
+                                //                  using the corresponding Vulkan constant
+                                // fifth  element : the size in byte of the element
+                                // sixth  element : a constant defining the element usage
+                                //                   POSITION - a vec3 with the position
+                                //                   NORMAL   - a vec3 with the normal vector
+                                //                   UV       - a vec2 with a UV coordinate
+                                //                   COLOR    - a vec4 with a RGBA color
+                                //                   TANGENT  - a vec4 with the tangent vector
+                                //                   OTHER    - anything else
+                                //
+                                // ***************** DOUBLE CHECK ********************
+                                //  That the Vertex data structure you use in the "offsetoff" and
+                                //	in the "sizeof" in the previous array, refers to the correct one,
+                                //	if you have more than one vertex format!
+                                // ***************************************************
+                                {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexWithTextID, pos),
+                                        sizeof(glm::vec3), POSITION},
+                                {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexWithTextID, norm),
+                                        sizeof(glm::vec3), NORMAL},
+                                {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(VertexWithTextID, UV),
+                                        sizeof(glm::vec2), UV},
+                                {0, 3, VK_FORMAT_R8_UINT,          offsetof(VertexWithTextID, texID),
+                                        sizeof(uint8_t),   OTHER},
+                        });
 
         VOverlay.init(this, {
                 {0, sizeof(VertexOverlay), VK_VERTEX_INPUT_RATE_VERTEX}
@@ -903,15 +951,15 @@ protected:
                 {1, sizeof(DoorModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
         }, {
                                     {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
-                                            sizeof(glm::vec3), POSITION},
+                                                                                                             sizeof(glm::vec3), POSITION},
                                     {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, norm),
-                                            sizeof(glm::vec3), NORMAL},
+                                                                                                             sizeof(glm::vec3), NORMAL},
                                     {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
-                                            sizeof(glm::vec2), UV},
-                                    {1, 3, VK_FORMAT_R32_SFLOAT,       offsetof(DoorModelInstance, baseRot), sizeof(float), OTHER},
-                                    {1, 4, VK_FORMAT_R32G32B32_SFLOAT, offsetof(DoorModelInstance, pos),
-                                            sizeof(glm::vec3), OTHER},
-
+                                                                                                             sizeof(glm::vec2), UV},
+                                    {1, 3, VK_FORMAT_R32_SFLOAT,       offsetof(DoorModelInstance,
+                                                                                baseRot),                    sizeof(float),     OTHER},
+                                    {1, 4, VK_FORMAT_R32G32B32_SFLOAT, offsetof(DoorModelInstance,
+                                                                                pos),                        sizeof(glm::vec3), OTHER},
                             });
 
         // Pipelines [Shader couples]
@@ -922,7 +970,8 @@ protected:
         PMesh.init(this, &VMesh, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLMesh});
         PMesh.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PMeshMultiTexture.init(this, &VMeshTexID, "shaders/ShaderVertMultiTexture.spv", "shaders/ShaderFragMultiTexture.spv", {&DSLGubo, &DSLMeshMultiTex});
+        PMeshMultiTexture.init(this, &VMeshTexID, "shaders/ShaderVertMultiTexture.spv",
+                               "shaders/ShaderFragMultiTexture.spv", {&DSLGubo, &DSLMeshMultiTex});
         PMeshMultiTexture.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
@@ -935,7 +984,6 @@ protected:
         PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderVertInstanced.spv", "shaders/ShaderFrag.spv",
                             {&DSLGubo, &DSLDoor});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
-
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
@@ -960,7 +1008,8 @@ protected:
 
 
         auto floorplan = generateFloorplan(MAX_DIMENSION);
-        startingRoomCenter = floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors, &boundingRectangles);
+        startingRoomCenter = floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors,
+                                                   &boundingRectangles);
         MBuilding.initMesh(this, &VMeshTexID);
 
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
@@ -968,7 +1017,7 @@ protected:
         MDoor.instanceBufferPresent = true;
         MDoor.instances.reserve(doors.size());
         for (auto &door: doors) {
-            MDoor.instances.push_back({door.baseRot, door.doorPos });
+            MDoor.instances.push_back({door.baseRot, door.doorPos});
         }
         MDoor.init(this, &VMeshInstanced, "models/door_009_Mesh.112.mgcg", MGCG);
 
@@ -1049,13 +1098,13 @@ protected:
                 // second element : UNIFORM or TEXTURE (an enum) depending on the type
                 // third  element : only for UNIFORMS, the size of the corresponding C++ object. For texture, just put 0
                 // fourth element : only for TEXTURES, the pointer to the corresponding texture object. For uniforms, use nullptr
-                {0, UNIFORM, sizeof(UniformBlock), nullptr},
-                {1, TEXTURE, 0,                    &TAsphalt},
+                {0, UNIFORM, sizeof(UniformBlock),      nullptr},
+                {1, TEXTURE, 0,                         &TAsphalt},
                 {2, UNIFORM, sizeof(UniformBlockWorld), nullptr}
         });
         DSFence.init(this, &DSLMesh, {
-                {0, UNIFORM, sizeof(UniformBlock), nullptr},
-                {1, TEXTURE, 0,                    &T3},
+                {0, UNIFORM, sizeof(UniformBlock),      nullptr},
+                {1, TEXTURE, 0,                         &T3},
                 {2, UNIFORM, sizeof(UniformBlockWorld), nullptr}
         });
         DSGubo.init(this, &DSLGubo, {
@@ -1066,7 +1115,7 @@ protected:
                 {1, TEXTURE, 0,                           &TOverlayMoveObject}
         });
         DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
-                {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                {0, UNIFORM, sizeof(UniformBlock),      nullptr},
                 {1, UNIFORM, sizeof(UniformBlockWorld), nullptr}
         });
         DSDoor.init(this, &DSLDoor, {
@@ -1075,16 +1124,16 @@ protected:
         });
 
         DSBuilding.init(this, &DSLMeshMultiTex, {
-                {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                {0, UNIFORM, sizeof(UniformBlock),      nullptr},
                 {1, UNIFORM, sizeof(UniformBlockWorld), nullptr},
-                {2, TEXTURE, 0,                    &TPlankWall, 0},
-                {2, TEXTURE, 0,                    &TAsphalt, 1}
+                {2, TEXTURE, 0,                         &TPlankWall, 0},
+                {2, TEXTURE, 0,                         &TAsphalt,   1}
         });
 
         for (auto &mInfo: MV) {
             mInfo.dsModel.init(this, &DSLMesh, {
-                    {0, UNIFORM, sizeof(UniformBlock), nullptr},
-                    {1, TEXTURE, 0,                    &T2},
+                    {0, UNIFORM, sizeof(UniformBlock),      nullptr},
+                    {1, TEXTURE, 0,                         &T2},
                     {2, UNIFORM, sizeof(UniformBlockWorld), nullptr}
             });
         }
@@ -1172,7 +1221,6 @@ protected:
         DSBuilding.bind(commandBuffer, PMeshMultiTexture, 1, currentImage);
         MBuilding.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
-
 
         // binds the pipeline
         // For a pipeline object, this command binds the corresponding pipeline to the command buffer passed in its parameter
@@ -1397,6 +1445,7 @@ protected:
 
         size_t indexSpot = 0;
         size_t indexPoint = 0;
+        size_t poliLightPos = 0;
         for (auto &modelInfo: MV) {
             for (auto light: modelInfo.model.lights) {
                 if (light.type == SPOT) {
@@ -1415,6 +1464,17 @@ protected:
                 } else if (light.type == POINT) {
                     gubo.pointLights[indexPoint].beta = light.parameters.point.beta;
                     gubo.pointLights[indexPoint].g = light.parameters.point.g;
+                    if (light.lightInPolikea) {
+                        if (poliLightPos == 0)
+                            modelInfo.modelPos = polikeaBuildingPosition + glm::vec3(-4.75f, 7.5f, -5.5f);
+                        if (poliLightPos == 1)
+                            modelInfo.modelPos = polikeaBuildingPosition + glm::vec3(4.75f, 7.5f, -5.5f);
+                        if (poliLightPos == 2)
+                            modelInfo.modelPos = polikeaBuildingPosition + glm::vec3(-4.75f, 7.5f, -14.5f);
+                        if (poliLightPos == 3)
+                            modelInfo.modelPos = polikeaBuildingPosition + glm::vec3(4.75f, 7.5f, -14.5f);
+                        poliLightPos++;
+                    }
                     gubo.pointLights[indexPoint].lightPos =
                             glm::vec3(glm::vec4(light.position, 1.0f)) + modelInfo.modelPos;
                     gubo.pointLights[indexPoint].lightColor = glm::vec4(light.lightColor, 1.0f);
@@ -1423,12 +1483,12 @@ protected:
             }
         }
         gubo.nSpotLights = indexSpot;
-        gubo.nPointLights = indexPoint;
+        gubo.nPointLights = indexPoint + 4;
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
 
-        // TODO check slot number (secondo me è 0) and these basetr and world matrix (if we can get rid of them)
+        // TODO basetr and world matrix (if we can get rid of them)
 
         glm::mat4 baseTr = glm::mat4(1.0f);
         glm::mat4 World = glm::scale(glm::mat4(1), glm::vec3(5.0f));
@@ -1439,9 +1499,8 @@ protected:
         uboPolikea.sColor = glm::vec3(1.0f);
         uboPolikea.prjViewMat = ViewPrj;
         DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
-        DSPolikeaBuilding.map(currentImage, &uboWorldPolikea, sizeof (uboWorldPolikea), 1);
+        DSPolikeaBuilding.map(currentImage, &uboWorldPolikea, sizeof(uboWorldPolikea), 1);
 
-        //World = baseTr;
         uboWorldBuilding.worldMatrix = glm::mat4(1.0f);
         uboBuilding.amb = 0.05f;
         uboBuilding.gamma = 180.0f;
@@ -1482,7 +1541,6 @@ protected:
         DSFence.map(currentImage, &uboFence, sizeof(uboFence), 0);
         DSFence.map(currentImage, &uboWorldFence, sizeof(uboWorldFence), 2);
 
-        //World = baseTr;
         uboDoor.amb = 0.05f;
         uboDoor.gamma = 180.0f;
         uboDoor.sColor = glm::vec3(1.0f);
