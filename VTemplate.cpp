@@ -17,23 +17,10 @@
 
 namespace fs = std::filesystem;
 
-//namespace std {
-//    template<>
-//    struct hash<glm::vec3> {
-//        size_t operator()(const glm::vec3 &t) const {
-//            // Calculate the hash using the member variables
-//            size_t seed = 0;
-//            hash<float> hasher;
-//            seed ^= hasher(t.x) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-//            seed ^= hasher(t.y) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-//            seed ^= hasher(t.z) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-//            return seed;
-//        }
-//    };
-//}
-
 //REMEMBER TO UPDATE THIS FIELD ALSO IN THE ShaderInstanced.vert
-#define N_ROOMS 6
+// TODO temporal solution: in ShaderInstanced.vert keep N_ROOMS greater than or equal to both N_ROOMS and N_POS_LIGHTS
+#define N_ROOMS 5
+#define N_POS_LIGHTS 4
 
 #define MIN_DIMENSION (12.5f)
 #define MAX_DIMENSION (18.0f)
@@ -71,11 +58,6 @@ enum Direction {
 
 struct DoorModelInstance {
     float baseRot;
-    glm::vec3 pos;
-};
-
-
-struct PositionedLightInstance {
     glm::vec3 pos;
 };
 
@@ -148,8 +130,6 @@ struct UniformBlockDoors {
     alignas(16) glm::mat4 prjViewMat;
     alignas(16) glm::vec4 door[N_ROOMS - 1];
 };
-
-
 
 struct UniformBlockWorld {
     alignas(16) glm::mat4 worldMatrix;
@@ -770,11 +750,9 @@ protected:
     uint32_t MoveObjIndex = 0;
     glm::vec3 startingRoomCenter;
 
-    Model<Vertex, DoorModelInstance> MDoor;
-    DescriptorSet DSDoor;
-    UniformBlockDoors uboDoor;
-    Model<Vertex, PositionedLightInstance> MPositionedLight;
-    DescriptorSet DSPositioinedLight;
+    Model<Vertex, DoorModelInstance> MDoor, MPositionedLights;
+    DescriptorSet DSDoor, DSPositionedLights;
+    UniformBlockDoors uboDoor, uboPositionedLights;
 
     std::vector<OpenableDoor> doors;
 
@@ -951,15 +929,15 @@ protected:
                 {1, sizeof(DoorModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
         }, {
                                     {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
-                                                                                                             sizeof(glm::vec3), POSITION},
+                                                                                          sizeof(glm::vec3), POSITION},
                                     {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, norm),
-                                                                                                             sizeof(glm::vec3), NORMAL},
+                                                                                          sizeof(glm::vec3), NORMAL},
                                     {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
-                                                                                                             sizeof(glm::vec2), UV},
+                                                                                          sizeof(glm::vec2), UV},
                                     {1, 3, VK_FORMAT_R32_SFLOAT,       offsetof(DoorModelInstance,
-                                                                                baseRot),                    sizeof(float),     OTHER},
+                                                                                baseRot), sizeof(float),     OTHER},
                                     {1, 4, VK_FORMAT_R32G32B32_SFLOAT, offsetof(DoorModelInstance,
-                                                                                pos),                        sizeof(glm::vec3), OTHER},
+                                                                                pos),     sizeof(glm::vec3), OTHER},
                             });
 
         // Pipelines [Shader couples]
@@ -1020,6 +998,13 @@ protected:
             MDoor.instances.push_back({door.baseRot, door.doorPos});
         }
         MDoor.init(this, &VMeshInstanced, "models/door_009_Mesh.112.mgcg", MGCG);
+
+        MPositionedLights.instanceBufferPresent = true;
+        MPositionedLights.instances.reserve(N_POS_LIGHTS);
+        for (int i = 0; i < N_POS_LIGHTS; i++) {
+            MPositionedLights.instances.push_back({0.0f, getPolikeaPositionedLightsPos()[i]});
+        }
+        MPositionedLights.init(this, &VMeshInstanced, "models/lights/polilamp.mgcg", MGCG);
 
         // Create the textures
         // The second parameter is the file name
@@ -1122,7 +1107,10 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
                 {1, TEXTURE, 0,                         &T2}
         });
-
+        DSPositionedLights.init(this, &DSLDoor, {
+                {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
+                {1, TEXTURE, 0,                         &T2}
+        });
         DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock),      nullptr},
                 {1, UNIFORM, sizeof(UniformBlockWorld), nullptr},
@@ -1156,6 +1144,7 @@ protected:
         DSOverlayMoveOject.cleanup();
         DSPolikeaBuilding.cleanup();
         DSDoor.cleanup();
+        DSPositionedLights.cleanup();
         DSBuilding.cleanup();
 
         for (auto &mInfo: MV)
@@ -1180,6 +1169,7 @@ protected:
         MOverlay.cleanup();
         MPolikeaBuilding.cleanup();
         MDoor.cleanup();
+        MPositionedLights.cleanup();
         MBuilding.cleanup();
         for (auto &mInfo: MV)
             mInfo.model.cleanup();
@@ -1273,6 +1263,10 @@ protected:
         DSDoor.bind(commandBuffer, PMeshInstanced, 1, currentImage);
         MDoor.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1, 0, 0, 0);
+
+        DSPositionedLights.bind(commandBuffer, PMeshInstanced, 1, currentImage);
+        MPositionedLights.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
@@ -1464,17 +1458,6 @@ protected:
                 } else if (light.type == POINT) {
                     gubo.pointLights[indexPoint].beta = light.parameters.point.beta;
                     gubo.pointLights[indexPoint].g = light.parameters.point.g;
-                    if (light.lightInPolikea) {
-                        if (poliLightPos == 0)
-                            modelInfo.modelPos = polikeaBuildingPosition + glm::vec3(-4.75f, 7.5f, -5.5f);
-                        if (poliLightPos == 1)
-                            modelInfo.modelPos = polikeaBuildingPosition + glm::vec3(4.75f, 7.5f, -5.5f);
-                        if (poliLightPos == 2)
-                            modelInfo.modelPos = polikeaBuildingPosition + glm::vec3(-4.75f, 7.5f, -14.5f);
-                        if (poliLightPos == 3)
-                            modelInfo.modelPos = polikeaBuildingPosition + glm::vec3(4.75f, 7.5f, -14.5f);
-                        poliLightPos++;
-                    }
                     gubo.pointLights[indexPoint].lightPos =
                             glm::vec3(glm::vec4(light.position, 1.0f)) + modelInfo.modelPos;
                     gubo.pointLights[indexPoint].lightColor = glm::vec4(light.lightColor, 1.0f);
@@ -1482,8 +1465,19 @@ protected:
                 }
             }
         }
+
+        for (int i = 0; i < N_POS_LIGHTS; i++) {
+            for (auto light: MPositionedLights.lights) {
+                gubo.pointLights[indexPoint].beta = light.parameters.point.beta;
+                gubo.pointLights[indexPoint].g = light.parameters.point.g;
+                gubo.pointLights[indexPoint].lightPos =
+                        glm::vec3(glm::vec4(light.position, 1.0f)) + getPolikeaPositionedLightsPos()[i];
+                gubo.pointLights[indexPoint].lightColor = glm::vec4(light.lightColor, 1.0f);
+                indexPoint++;
+            }
+        }
         gubo.nSpotLights = indexSpot;
-        gubo.nPointLights = indexPoint + 4;
+        gubo.nPointLights = indexPoint;
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
@@ -1549,6 +1543,15 @@ protected:
             uboDoor.door[i] = glm::vec4(doors[i].doorRot);
         }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
+
+        uboPositionedLights.amb = 0.05f;
+        uboPositionedLights.gamma = 180.0f;
+        uboPositionedLights.sColor = glm::vec3(1.0f);
+        uboPositionedLights.prjViewMat = ViewPrj;
+        for (int i = 0; i < N_POS_LIGHTS; i++) {
+            uboPositionedLights.door[i] = glm::vec4(0.0f);
+        }
+        DSPositionedLights.map(currentImage, &uboPositionedLights, sizeof(uboPositionedLights), 0);
 
         for (auto &mInfo: MV) {
             World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;

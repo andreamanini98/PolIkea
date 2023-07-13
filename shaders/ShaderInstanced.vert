@@ -1,7 +1,7 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-#define N_ROOMS 6
+#define N_ROOMS 10
 
 layout(std140, set = 1, binding = 0) uniform UniformBufferObject {
 	float amb;

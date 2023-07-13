@@ -28,6 +28,15 @@ std::vector<glm::vec3> getPolikeaBuildingOffsets() {
     };
 }
 
+std::vector<glm::vec3> getPolikeaPositionedLightsPos() {
+    return {
+            getPolikeaBuildingPosition() + glm::vec3(-4.75f, 7.5f, -5.5f),
+            getPolikeaBuildingPosition() + glm::vec3(4.75f, 7.5f, -5.5f),
+            getPolikeaBuildingPosition() + glm::vec3(-4.75f, 7.5f, -14.5f),
+            getPolikeaBuildingPosition() + glm::vec3(4.75f, 7.5f, -14.5f)
+    };
+}
+
 std::vector<BoundingRectangle> getBoundingRectangles(glm::vec3 polikeaBuildingPosition,
                                                      float frontOffset, float sideOffset, float backOffset) {
     return {
