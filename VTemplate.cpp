@@ -1043,6 +1043,10 @@ protected:
             if (static_cast<std::string>(entry.path()).find("DS_Store") != std::string::npos)
                 continue;
 
+            // TODO this is only to skip other lights
+            if (static_cast<std::string>(entry.path()).find("lamp") != std::string::npos)
+                continue;
+
             ModelInfo MI;
             // The second parameter is the pointer to the vertex definition for this model
             // The third parameter is the file name
@@ -1296,16 +1300,13 @@ protected:
         const float ROT_SPEED = glm::radians(120.0f);
         const float MOVE_SPEED = 4.0f;
 
-        static bool debounce = false;
-        static int curDebounce = 0;
-        static bool doorDebounce = false;
-        static int curDoorDebounce = 0;
+        static bool debounce, lightDebounce = false;
+        static int curDebounce, curLightDebounce = 0;
 
         float deltaT;
         auto m = glm::vec3(0.0f), r = glm::vec3(0.0f);
-        bool fire = false;
-        //static bool openDoor = false;
-        getSixAxis(deltaT, m, r, fire /*openDoor see line 1833 in Starter.hpp. Useless if doors are automatic*/);
+        bool fire, lightSwitch = false;
+        getSixAxis(deltaT, m, r, fire, lightSwitch);
 
         CamAlpha = CamAlpha - ROT_SPEED * deltaT * r.y;
         CamBeta = CamBeta - ROT_SPEED * deltaT * r.x;
@@ -1380,11 +1381,9 @@ protected:
             if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
                 Door.doorState = OPENING;
             }
-
             if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
                 Door.doorState = CLOSING;
             }
-
             if (Door.doorState == OPENING) {
                 Door.doorRot -= Door.doorSpeed * deltaT;
                 if (Door.doorRot <= -glm::radians(90.0f)) {
@@ -1392,7 +1391,6 @@ protected:
                     Door.doorRot = -glm::radians(90.0f);
                 }
             }
-
             if (Door.doorState == WAITING_OPEN) {
                 Door.time += deltaT;
                 if (Door.time > 5) {
@@ -1400,7 +1398,6 @@ protected:
                     Door.doorState = OPEN;
                 }
             }
-
             if (Door.doorState == CLOSING) {
                 Door.doorRot += Door.doorSpeed * deltaT;
                 if (Door.doorRot >= 0.0f) {
@@ -1408,6 +1405,18 @@ protected:
                     Door.doorRot = 0.0f;
                 }
             }
+        }
+
+        static bool turnOffLight = false;
+        if (lightSwitch) {
+            if (!lightDebounce) {
+                lightDebounce = true;
+                curLightDebounce = GLFW_KEY_L;
+                turnOffLight = !turnOffLight;
+            }
+        } else if ((curLightDebounce == GLFW_KEY_L) && lightDebounce) {
+            lightDebounce = false;
+            curLightDebounce = 0;
         }
 
         float threshold = 2.0f;
@@ -1431,11 +1440,9 @@ protected:
                         OnlyMoveCam = true;
                 }
             }
-        } else {
-            if ((curDebounce == GLFW_KEY_SPACE) && debounce) {
-                debounce = false;
-                curDebounce = 0;
-            }
+        } else if ((curDebounce == GLFW_KEY_SPACE) && debounce) {
+            debounce = false;
+            curDebounce = 0;
         }
 
         if (glfwGetKey(window, GLFW_KEY_H)) {
@@ -1487,7 +1494,8 @@ protected:
                 gubo.pointLights[indexPoint].g = light.parameters.point.g;
                 gubo.pointLights[indexPoint].lightPos =
                         glm::vec3(glm::vec4(light.position, 1.0f)) + positionedLightPos[i];
-                gubo.pointLights[indexPoint].lightColor = glm::vec4(light.lightColor, 1.0f);
+                gubo.pointLights[indexPoint].lightColor = glm::vec4(
+                        turnOffLight ? glm::vec3(0.0f, 0.0f, 0.0f) : light.lightColor, 1.0f);
                 indexPoint++;
             }
         }
@@ -1497,12 +1505,8 @@ protected:
 
         glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
 
-        // TODO basetr and world matrix (if we can get rid of them)
-
-        glm::mat4 baseTr = glm::mat4(1.0f);
-        glm::mat4 World = glm::scale(glm::mat4(1), glm::vec3(5.0f));
-
-        uboWorldPolikea.worldMatrix = glm::translate(glm::mat4(1), polikeaBuildingPosition) * World;
+        uboWorldPolikea.worldMatrix =
+                glm::translate(glm::mat4(1), polikeaBuildingPosition) * glm::scale(glm::mat4(1), glm::vec3(5.0f));
         uboPolikea.amb = 0.05f;
         uboPolikea.gamma = 180.0f;
         uboPolikea.sColor = glm::vec3(1.0f);
@@ -1554,22 +1558,21 @@ protected:
         uboDoor.gamma = 180.0f;
         uboDoor.sColor = glm::vec3(1.0f);
         uboDoor.prjViewMat = ViewPrj;
-        for (int i = 0; i < N_ROOMS - 1; i++) {
+        for (int i = 0; i < N_ROOMS - 1; i++)
             uboDoor.door[i] = glm::vec4(doors[i].doorRot);
-        }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
 
         uboPositionedLights.amb = 0.05f;
         uboPositionedLights.gamma = 180.0f;
         uboPositionedLights.sColor = glm::vec3(1.0f);
         uboPositionedLights.prjViewMat = ViewPrj;
-        for (int i = 0; i < N_POS_LIGHTS; i++) {
-            uboPositionedLights.lights[i] = glm::vec4(0.0f);
-        }
+        for (auto &light: uboPositionedLights.lights)
+            light = glm::vec4(0.0f);
         DSPositionedLights.map(currentImage, &uboPositionedLights, sizeof(uboPositionedLights), 0);
 
         for (auto &mInfo: MV) {
-            World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * baseTr;
+            glm::mat4 World =
+                    MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * glm::mat4(1.0f);;
             mInfo.uboWorldModel.worldMatrix = World;
             mInfo.modelUBO.amb = 0.05f;
             mInfo.modelUBO.gamma = 180.0f;
