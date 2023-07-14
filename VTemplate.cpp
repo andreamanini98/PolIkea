@@ -412,17 +412,17 @@ inline std::vector<Room> generateFloorplan(float dimension) {
     return std::move(rooms);
 }
 
-inline glm::vec3
+inline void
 floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithTextID> &vPos, std::vector<uint32_t> &vIdx,
                       std::vector<OpenableDoor> &openableDoors, std::vector<BoundingRectangle> *bounds,
-                      std::vector<glm::vec3> *positionedLightPos) {
+                      std::vector<glm::vec3> *positionedLightPos, std::vector<glm::vec3> *roomCenters,
+                      std::vector<BoundingRectangle> *roomOccupiedArea) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> floorTexDistribution(1, 4);
 
     VertexStorage storage(vPos, vIdx, openableDoors);
     int test = 0;
-    glm::vec3 startingRoomCenter = glm::vec3(0.0f, 0.0f, 0.0f);
 
     for (auto &room: rooms) {
         int floorTex = floorTexDistribution(gen);
@@ -432,10 +432,15 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
         glm::vec3 roomCenter = glm::vec3(room.startX + room.width / 2, ROOM_CEILING_HEIGHT,
                                          room.startY + room.depth / 2);
         positionedLightPos->push_back(roomCenter);
-        if (test == 0)
-            startingRoomCenter = roomCenter - glm::vec3(0.0f, ROOM_CEILING_HEIGHT, 0.0f);
+        roomCenters->push_back(roomCenter - glm::vec3(0.0f, ROOM_CEILING_HEIGHT, 0.0f));
 
         auto color = glm::vec3((test % 3) == 0, (test % 3) == 1, (test % 3) == 2);
+
+        // Here the bottom left and the top right are, respectively, the room's topLeft and bottomRight
+        // Maybe there is a misunderstanding in the convention
+        roomOccupiedArea->push_back(BoundingRectangle{
+                glm::vec3(room.startX, 0, room.startY + room.depth),
+                glm::vec3(room.startX + room.width, 0, room.startY)});
 
         storage.drawRect(
                 glm::vec3(room.startX, 0, room.startY),
@@ -607,8 +612,6 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
 
         test++;
     }
-
-    return startingRoomCenter;
 }
 
 
@@ -682,6 +685,7 @@ struct ModelInfo {
     glm::vec3 maxCoords;
     glm::vec3 size;
     glm::vec3 center;
+    uint8_t roomCycling = 0;
 
     glm::vec3 getMinCoordPos() const { return minCoords + modelPos; }
 
@@ -763,7 +767,9 @@ protected:
     float CamRho = 0.0f;
     bool OnlyMoveCam = true;
     uint32_t MoveObjIndex = 0;
-    glm::vec3 startingRoomCenter;
+
+    std::vector<glm::vec3> roomCenters;
+    std::vector<BoundingRectangle> roomOccupiedArea;
 
     Model<Vertex, ModelInstance> MDoor, MPositionedLights;
     DescriptorSet DSDoor, DSPositionedLights;
@@ -771,6 +777,15 @@ protected:
     UniformBlockPositionedLights uboPositionedLights;
 
     std::vector<OpenableDoor> doors;
+
+    inline glm::vec3
+    rotateTargetRespectToCam(glm::vec3 CamPosition, float CameraAlpha, float CameraBeta, glm::vec3 modelPosition) {
+        return glm::translate(glm::mat4(1.0f), CamPosition) *
+               glm::rotate(glm::mat4(1), CameraAlpha, glm::vec3(0.0f, 1.0f, 0.0f)) *
+               glm::rotate(glm::mat4(1), CameraBeta, glm::vec3(1.0f, 0.0f, 0.0f)) *
+               glm::translate(glm::mat4(1.0f), -CamPosition) *
+               glm::vec4(modelPosition, 1.0f);
+    }
 
     // Here you set the main application parameters
     void setWindowParameters() {
@@ -1007,8 +1022,8 @@ protected:
 
 
         auto floorplan = generateFloorplan(MAX_DIMENSION);
-        startingRoomCenter = floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors,
-                                                   &boundingRectangles, &positionedLightPos);
+        floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors, &boundingRectangles,
+                              &positionedLightPos, &roomCenters, &roomOccupiedArea);
         MBuilding.initMesh(this, &VMeshTexID);
 
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
@@ -1190,6 +1205,9 @@ protected:
         TFence.cleanup();
         TOverlayMoveObject.cleanup();
         TPlankWall.cleanup();
+        TTiledStones.cleanup();
+        TDarkFloor.cleanup();
+        TBathFloor.cleanup();
 
         // Cleanup models
         MPolikeaExternFloor.cleanup();
@@ -1312,13 +1330,13 @@ protected:
         const float ROT_SPEED = glm::radians(120.0f);
         const float MOVE_SPEED = 4.0f;
 
-        static bool debounce, lightDebounce = false;
-        static int curDebounce, curLightDebounce = 0;
+        static bool debounce, lightDebounce, roomCyclingDebounce = false;
+        static int curDebounce, curLightDebounce, curRoomCyclingDebounce = 0;
 
         float deltaT;
         auto m = glm::vec3(0.0f), r = glm::vec3(0.0f);
-        bool fire, lightSwitch = false;
-        getSixAxis(deltaT, m, r, fire, lightSwitch);
+        bool fire, lightSwitch, cycleRoom = false;
+        getSixAxis(deltaT, m, r, fire, lightSwitch, cycleRoom);
 
         CamAlpha = CamAlpha - ROT_SPEED * deltaT * r.y;
         CamBeta = CamBeta - ROT_SPEED * deltaT * r.x;
@@ -1334,45 +1352,31 @@ protected:
 
         glm::vec3 ux = glm::rotate(glm::mat4(1.0f), CamAlpha, glm::vec3(0, 1, 0)) * glm::vec4(1, 0, 0, 1);
         glm::vec3 uz = glm::rotate(glm::mat4(1.0f), CamAlpha, glm::vec3(0, 1, 0)) * glm::vec4(0, 0, -1, 1);
+
+        glm::vec3 oldCamPos = CamPos;
         CamPos = CamPos + MOVE_SPEED * m.x * ux * deltaT;
         CamPos = CamPos + MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT; //Do not allow to fly
         CamPos = CamPos + MOVE_SPEED * m.z * uz * deltaT;
 
-        for (auto &boundingRectangle: boundingRectangles) {
-            if (CamPos.x >= boundingRectangle.bottomLeft.x && CamPos.x <= boundingRectangle.topRight.x &&
-                CamPos.z <= boundingRectangle.bottomLeft.z && CamPos.z >= boundingRectangle.topRight.z) {
-                CamPos = CamPos - MOVE_SPEED * m.x * ux * deltaT;
-                CamPos = CamPos - MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT;
-                CamPos = CamPos - MOVE_SPEED * m.z * uz * deltaT;
-            }
-        }
+        for (auto &boundingRectangle: boundingRectangles)
+            if (checkIfInBoundingRectangle(CamPos, boundingRectangle))
+                CamPos = oldCamPos;
 
         if (!OnlyMoveCam) {
             //Checks to see if an object can be bought
             if (!MV[MoveObjIndex].hasBeenBought) {
                 bool isObjectAllowedToMove = true;
                 for (auto &i: MV)
-                    isObjectAllowedToMove = isObjectAllowedToMove && !(i.modelPos == startingRoomCenter);
+                    isObjectAllowedToMove = isObjectAllowedToMove && !(i.modelPos == roomCenters[0]);
                 if (isObjectAllowedToMove) {
-                    MV[MoveObjIndex].modelPos = startingRoomCenter;
+                    MV[MoveObjIndex].modelPos = roomCenters[0];
                     MV[MoveObjIndex].hasBeenBought = true;
                 }
                 OnlyMoveCam = true;
             } else {
-                const glm::vec3 modelPos = glm::vec3(
-                        CamPos.x,
-                        CamPos.y - 1.0f,
-                        CamPos.z - 2.0f
-                );
-
+                const glm::vec3 modelPos = glm::vec3(CamPos.x, CamPos.y - 1.0f, CamPos.z - 2.0f);
                 glm::vec3 oldPos = MV[MoveObjIndex].modelPos;
-
-                MV[MoveObjIndex].modelPos =
-                        glm::translate(glm::mat4(1.0f), CamPos) *
-                        glm::rotate(glm::mat4(1), CamAlpha, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                        glm::rotate(glm::mat4(1), CamBeta, glm::vec3(1.0f, 0.0f, 0.0f)) *
-                        glm::translate(glm::mat4(1.0f), -CamPos) *
-                        glm::vec4(modelPos, 1.0f);
+                MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(CamPos, CamAlpha, CamBeta, modelPos);
 
                 if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
 
@@ -1386,6 +1390,30 @@ protected:
                 }
 
                 MV[MoveObjIndex].modelRot = CamAlpha;
+
+                if (cycleRoom) {
+                    if (!roomCyclingDebounce) {
+                        roomCyclingDebounce = true;
+                        curRoomCyclingDebounce = GLFW_KEY_0;
+
+                        if (MV[MoveObjIndex].roomCycling < N_ROOMS) {
+                            MV[MoveObjIndex].roomCycling++;
+                            if (MV[MoveObjIndex].roomCycling >= N_ROOMS)
+                                MV[MoveObjIndex].roomCycling = 0;
+                            CamPos = roomCenters[MV[MoveObjIndex].roomCycling] + glm::vec3(0.0f, 1.0f, 0.0f);
+                            MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(CamPos, CamAlpha, CamBeta, modelPos);
+                        }
+                    }
+                } else if ((curRoomCyclingDebounce == GLFW_KEY_0) && roomCyclingDebounce) {
+                    roomCyclingDebounce = false;
+                    curRoomCyclingDebounce = 0;
+                }
+
+                if (!checkIfInBoundingRectangle(MV[MoveObjIndex].modelPos,
+                                                roomOccupiedArea[MV[MoveObjIndex].roomCycling],
+                                                -MV[MoveObjIndex].cylinderRadius)) {
+                    MV[MoveObjIndex].modelPos = oldPos;
+                }
             }
         }
 
@@ -1458,7 +1486,7 @@ protected:
         }
 
         if (glfwGetKey(window, GLFW_KEY_H)) {
-            CamPos = startingRoomCenter + glm::vec3(0.0f, 0.7, 3.0f);
+            CamPos = roomCenters[0] + glm::vec3(0.0f, 1.0, 3.0f);
             CamAlpha = CamBeta = CamRho = 0.0f;
         }
         if (glfwGetKey(window, GLFW_KEY_K)) {
@@ -1473,7 +1501,6 @@ protected:
 
         size_t indexSpot = 0;
         size_t indexPoint = 0;
-        size_t poliLightPos = 0;
         for (auto &modelInfo: MV) {
             for (auto light: modelInfo.model.lights) {
                 if (light.type == SPOT) {
