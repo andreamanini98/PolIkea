@@ -28,8 +28,21 @@ std::vector<glm::vec3> getPolikeaBuildingOffsets() {
     };
 }
 
-std::vector<BoundingRectangle> getBoundingRectangles(glm::vec3 polikeaBuildingPosition,
-                                                     float frontOffset, float sideOffset, float backOffset) {
+std::vector<glm::vec3> getPolikeaPositionedLightsPos() {
+    return {
+            getPolikeaBuildingPosition() + glm::vec3(-4.75f, 7.5f, -5.5f),
+            getPolikeaBuildingPosition() + glm::vec3(4.75f, 7.5f, -5.5f),
+            getPolikeaBuildingPosition() + glm::vec3(-4.75f, 7.5f, -14.5f),
+            getPolikeaBuildingPosition() + glm::vec3(4.75f, 7.5f, -14.5f)
+    };
+}
+
+std::vector<BoundingRectangle> getBoundingRectangles(
+        glm::vec3 polikeaBuildingPosition,
+        float frontOffset,
+        float sideOffset,
+        float backOffset
+) {
     return {
             //Polikea building bounding
             BoundingRectangle{glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f, polikeaBuildingPosition.z + 0.5f),
@@ -69,4 +82,14 @@ std::vector<BoundingRectangle> getBoundingRectangles(glm::vec3 polikeaBuildingPo
                                         0.0f,
                                         polikeaBuildingPosition.z - backOffset - 0.5f)}
     };
+}
+
+bool checkIfInBoundingRectangle(
+        glm::vec3 pointToCheck,
+        BoundingRectangle boundingRectangle,
+        float rectanglesPadding = 0.0f
+) {
+    glm::vec3 bl = boundingRectangle.bottomLeft + glm::vec3(-rectanglesPadding, 0.0f, rectanglesPadding);
+    glm::vec3 tr = boundingRectangle.topRight + glm::vec3(rectanglesPadding, 0.0f, -rectanglesPadding);
+    return (pointToCheck.x >= bl.x && pointToCheck.x <= tr.x && pointToCheck.z <= bl.z && pointToCheck.z >= tr.z);
 }

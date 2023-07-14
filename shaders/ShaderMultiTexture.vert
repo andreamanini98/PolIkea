@@ -6,7 +6,7 @@ layout(set = 1, binding = 0) uniform UniformBufferObject {
 	float gamma;
 	vec3 sColor;
 	mat4 mvpMat;
-	mat4 mMat;
+	mat4 worldMat;
 	mat4 nMat;
 } ubo;
 
@@ -25,7 +25,7 @@ layout (location = 4) out vec4 outShadowCoord;
 
 void main() {
 	gl_Position = ubo.mvpMat * vec4(inPosition, 1.0);
-	fragPos = (ubo.mMat * vec4(inPosition, 1.0)).xyz;
+	fragPos = (ubo.worldMat * vec4(inPosition, 1.0)).xyz;
 	fragNorm = (ubo.nMat * vec4(inNorm, 0.0)).xyz;
 	outUV = inUV;
 	outFragTextureID = inFragTextureID;

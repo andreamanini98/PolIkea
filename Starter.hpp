@@ -246,6 +246,7 @@ struct LightParameters {
         PointLightParameters point;
         SpotLightParameters spot;
     } parameters;
+    bool lightInPolikea;
 };
 class Empty {};
 template <class Vert, class Instance = Empty>
@@ -2109,7 +2110,7 @@ protected:
 		}
 	}
 
-	void getSixAxis(float &deltaT, glm::vec3 &m, glm::vec3 &r, bool &fire /*, bool &openDoor*/) {
+	void getSixAxis(float &deltaT, glm::vec3 &m, glm::vec3 &r, bool &fire, bool &lightSwitch, bool &cycleRoom) {
 		static auto startTime = std::chrono::high_resolution_clock::now();
 		static float lastTime = 0.0f;
 
@@ -2169,11 +2170,10 @@ protected:
 		if(glfwGetKey(window, GLFW_KEY_F)) {
 			m.y = -1.0f;
 		}
-        //if(glfwGetKey(window, GLFW_KEY_O)) {
-        //    openDoor = !(openDoor);
-        //}
 
 		fire = glfwGetKey(window, GLFW_KEY_SPACE) | glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+        lightSwitch = glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS;
+        cycleRoom = glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS;
 		handleGamePad(GLFW_JOYSTICK_1,m,r,fire);
 		handleGamePad(GLFW_JOYSTICK_2,m,r,fire);
 		handleGamePad(GLFW_JOYSTICK_3,m,r,fire);
@@ -2402,6 +2402,7 @@ void Model<Vert, Instance>::loadModelGLTF(std::string file, bool encoded) {
 	std::string warn, err;
 
     std::string lightFile = "lights/" + file.substr(0, file.length() - 4) + "lights";
+
     std::ifstream lightsStream(lightFile);
     std::string line;
     if(lightsStream.good()) {
@@ -3456,8 +3457,8 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 				descriptorWrites[j].pImageInfo = &imageInfo[j];
 			} else if(E[j].type == SHADOW_MAP) {
                 imageInfo[j].imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-                imageInfo[j].sampler = E[j].tex->textureSampler;
-                imageInfo[j].imageView = E[j].tex->textureImageView;
+                imageInfo[j].sampler = E[j].shadow->sampler;
+                imageInfo[j].imageView = E[j].shadow->imageView;
                 imageInfo[j].imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 
                 descriptorWrites[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
