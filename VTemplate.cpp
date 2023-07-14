@@ -55,10 +55,10 @@ enum Direction {
 
 // ----- GENERIC STRUCT ----- //
 
-struct DoorModelInstance {
+struct ModelInstance {
     float baseRot;
     glm::vec3 pos;
-    float instanceType; // 0 == doors, 1 == lights
+    float instanceType; // 0 == doors, 1 == lights (used in the shader)
 };
 
 struct OpenableDoor {
@@ -416,6 +416,14 @@ inline glm::vec3
 floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithTextID> &vPos, std::vector<uint32_t> &vIdx,
                       std::vector<OpenableDoor> &openableDoors, std::vector<BoundingRectangle> *bounds,
                       std::vector<glm::vec3> *positionedLightPos) {
+//    std::random_device rd;
+//    std::mt19937 gen(rd());
+//    std::uniform_int_distribution<int> floorTexDistribution(0, 3);
+//    for (int i = 0; i < 100; i++) {
+//        std::cout << "QRTQRTQRTQRTQRTQRQTQRT:   " << floorTexDistribution(gen) << std::endl;
+//    }
+
+
     VertexStorage storage(vPos, vIdx, openableDoors);
     int test = 0;
     glm::vec3 startingRoomCenter = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -717,7 +725,7 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLPositionedLights, DSLGubo, DSLOverlay, DSLVertexWithColors;
 
     // Vertex formats
     VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced;
@@ -761,7 +769,7 @@ protected:
     uint32_t MoveObjIndex = 0;
     glm::vec3 startingRoomCenter;
 
-    Model<Vertex, DoorModelInstance> MDoor, MPositionedLights;
+    Model<Vertex, ModelInstance> MDoor, MPositionedLights;
     DescriptorSet DSDoor, DSPositionedLights;
     UniformBlockDoors uboDoor;
     UniformBlockPositionedLights uboPositionedLights;
@@ -826,7 +834,9 @@ protected:
                 //                  using the corresponding Vulkan constant
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
-                {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
+        });
+        DSLPositionedLights.init(this, {
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
         // TODO may bring the DSLGUBO to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
         DSLGubo.init(this, {
@@ -939,7 +949,7 @@ protected:
 
         VMeshInstanced.init(this, {
                 {0, sizeof(Vertex),            VK_VERTEX_INPUT_RATE_VERTEX},
-                {1, sizeof(DoorModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
+                {1, sizeof(ModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
         }, {
                                     {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
                                                                                                sizeof(glm::vec3), POSITION},
@@ -947,11 +957,11 @@ protected:
                                                                                                sizeof(glm::vec3), NORMAL},
                                     {0, 2, VK_FORMAT_R32G32_SFLOAT,    offsetof(Vertex, UV),
                                                                                                sizeof(glm::vec2), UV},
-                                    {1, 3, VK_FORMAT_R32_SFLOAT,       offsetof(DoorModelInstance,
+                                    {1, 3, VK_FORMAT_R32_SFLOAT,       offsetof(ModelInstance,
                                                                                 baseRot),      sizeof(float),     OTHER},
-                                    {1, 4, VK_FORMAT_R32G32B32_SFLOAT, offsetof(DoorModelInstance,
+                                    {1, 4, VK_FORMAT_R32G32B32_SFLOAT, offsetof(ModelInstance,
                                                                                 pos),          sizeof(glm::vec3), OTHER},
-                                    {1, 5, VK_FORMAT_R32_SFLOAT,       offsetof(DoorModelInstance,
+                                    {1, 5, VK_FORMAT_R32_SFLOAT,       offsetof(ModelInstance,
                                                                                 instanceType), sizeof(float),     OTHER}
                             });
 
@@ -975,7 +985,7 @@ protected:
         //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderVertInstanced.spv", "shaders/ShaderFrag.spv",
-                            {&DSLGubo, &DSLDoor});
+                            {&DSLGubo, &DSLDoor, &DSLPositionedLights});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         // Models, textures and Descriptors (values assigned to the uniforms)
@@ -1028,8 +1038,6 @@ protected:
         T3.init(this, "textures/Fence.jpg");
         TPlankWall.init(this, "textures/plank_wall.jpg");
         TOverlayMoveObject.init(this, "textures/MoveBanner.png");
-
-        // Init local variables
     }
 
     inline void
@@ -1126,9 +1134,8 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
                 {1, TEXTURE, 0,                         &T2}
         });
-        DSPositionedLights.init(this, &DSLDoor, {
-                {2, UNIFORM, sizeof(UniformBlockPositionedLights), nullptr},
-                {1, TEXTURE, 0,                                    &T2}
+        DSPositionedLights.init(this, &DSLPositionedLights, {
+                {0, UNIFORM, sizeof(UniformBlockPositionedLights), nullptr}
         });
         DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock),      nullptr},
@@ -1200,6 +1207,7 @@ protected:
         DSLOverlay.cleanup();
         DSLVertexWithColors.cleanup();
         DSLDoor.cleanup();
+        DSLPositionedLights.cleanup();
 
         // Destroys the pipelines
         PMesh.destroy();
@@ -1265,25 +1273,27 @@ protected:
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
 
-        //--- PIPELINE OVERLAY ---
+        // --- PIPELINE OVERLAY ---
         POverlay.bind(commandBuffer);
         MOverlay.bind(commandBuffer);
         DSOverlayMoveOject.bind(commandBuffer, POverlay, 0, currentImage);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MOverlay.indices.size()), 1, 0, 0, 0);
 
+        // --- PIPELINE VERTEX WITH COLORS ---
         PVertexWithColors.bind(commandBuffer);
         DSGubo.bind(commandBuffer, PVertexWithColors, 0, currentImage);
         DSPolikeaBuilding.bind(commandBuffer, PVertexWithColors, 1, currentImage);
         MPolikeaBuilding.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaBuilding.indices.size()), 1, 0, 0, 0);
 
+        //--- PIPELINE INSTANCED ---
         PMeshInstanced.bind(commandBuffer);
         DSGubo.bind(commandBuffer, PMeshInstanced, 0, currentImage);
         DSDoor.bind(commandBuffer, PMeshInstanced, 1, currentImage);
+        DSPositionedLights.bind(commandBuffer, PMeshInstanced, 2, currentImage);
+
         MDoor.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1, 0, 0, 0);
-
-        DSPositionedLights.bind(commandBuffer, PMeshInstanced, 1, currentImage);
         MPositionedLights.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, 0);
     }
