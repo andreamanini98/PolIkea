@@ -416,20 +416,16 @@ inline glm::vec3
 floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithTextID> &vPos, std::vector<uint32_t> &vIdx,
                       std::vector<OpenableDoor> &openableDoors, std::vector<BoundingRectangle> *bounds,
                       std::vector<glm::vec3> *positionedLightPos) {
-//    std::random_device rd;
-//    std::mt19937 gen(rd());
-//    std::uniform_int_distribution<int> floorTexDistribution(0, 3);
-//    for (int i = 0; i < 100; i++) {
-//        std::cout << "QRTQRTQRTQRTQRTQRQTQRT:   " << floorTexDistribution(gen) << std::endl;
-//    }
-
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> floorTexDistribution(1, 4);
 
     VertexStorage storage(vPos, vIdx, openableDoors);
     int test = 0;
     glm::vec3 startingRoomCenter = glm::vec3(0.0f, 0.0f, 0.0f);
 
     for (auto &room: rooms) {
-        int floorTex = 1;
+        int floorTex = floorTexDistribution(gen);
         int ceilingTex = 0;
         int wallTex = 0;
 
@@ -744,7 +740,7 @@ protected:
     // Descriptor sets
     DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
     // Textures
-    Texture TAsphalt, T2, T3, TPlankWall, TOverlayMoveObject;
+    Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones;
     // C++ storage for uniform variables
     UniformBlockWorld uboWorldPolikea, uboWorldBuilding, uboWorldPolikeaExternFloor, uboWorldFence;
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
@@ -823,7 +819,7 @@ protected:
                 //                  using the corresponding Vulkan constant
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
-                {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 2},
+                {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 5},
         });
         DSLDoor.init(this, {
                 // This array contains the bindings:
@@ -948,7 +944,7 @@ protected:
                               });
 
         VMeshInstanced.init(this, {
-                {0, sizeof(Vertex),            VK_VERTEX_INPUT_RATE_VERTEX},
+                {0, sizeof(Vertex),        VK_VERTEX_INPUT_RATE_VERTEX},
                 {1, sizeof(ModelInstance), VK_VERTEX_INPUT_RATE_INSTANCE}
         }, {
                                     {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos),
@@ -1034,9 +1030,12 @@ protected:
         // Create the textures
         // The second parameter is the file name
         TAsphalt.init(this, "textures/Asphalt.jpg");
-        T2.init(this, "textures/Textures_Forniture.png");
-        T3.init(this, "textures/Fence.jpg");
+        TFurniture.init(this, "textures/Textures_Furniture.png");
+        TFence.init(this, "textures/Fence.jpg");
         TPlankWall.init(this, "textures/plank_wall.jpg");
+        TBathFloor.init(this, "textures/bath_floor.jpg");
+        TDarkFloor.init(this, "textures/dark_floor.jpg");
+        TTiledStones.init(this, "textures/tiled_stones.jpg");
         TOverlayMoveObject.init(this, "textures/MoveBanner.png");
     }
 
@@ -1116,7 +1115,7 @@ protected:
         });
         DSFence.init(this, &DSLMesh, {
                 {0, UNIFORM, sizeof(UniformBlock),      nullptr},
-                {1, TEXTURE, 0,                         &T3},
+                {1, TEXTURE, 0,                         &TFence},
                 {2, UNIFORM, sizeof(UniformBlockWorld), nullptr}
         });
         DSGubo.init(this, &DSLGubo, {
@@ -1132,7 +1131,7 @@ protected:
         });
         DSDoor.init(this, &DSLDoor, {
                 {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
-                {1, TEXTURE, 0,                         &T2}
+                {1, TEXTURE, 0,                         &TFurniture}
         });
         DSPositionedLights.init(this, &DSLPositionedLights, {
                 {0, UNIFORM, sizeof(UniformBlockPositionedLights), nullptr}
@@ -1140,14 +1139,17 @@ protected:
         DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock),      nullptr},
                 {1, UNIFORM, sizeof(UniformBlockWorld), nullptr},
-                {2, TEXTURE, 0,                         &TPlankWall, 0},
-                {2, TEXTURE, 0,                         &TAsphalt,   1}
+                {2, TEXTURE, 0,                         &TPlankWall,   0},
+                {2, TEXTURE, 0,                         &TAsphalt,     1},
+                {2, TEXTURE, 0,                         &TBathFloor,   2},
+                {2, TEXTURE, 0,                         &TDarkFloor,   3},
+                {2, TEXTURE, 0,                         &TTiledStones, 4}
         });
 
         for (auto &mInfo: MV) {
             mInfo.dsModel.init(this, &DSLMesh, {
                     {0, UNIFORM, sizeof(UniformBlock),      nullptr},
-                    {1, TEXTURE, 0,                         &T2},
+                    {1, TEXTURE, 0,                         &TFurniture},
                     {2, UNIFORM, sizeof(UniformBlockWorld), nullptr}
             });
         }
@@ -1184,8 +1186,8 @@ protected:
     void localCleanup() {
         // Cleanup textures
         TAsphalt.cleanup();
-        T2.cleanup();
-        T3.cleanup();
+        TFurniture.cleanup();
+        TFence.cleanup();
         TOverlayMoveObject.cleanup();
         TPlankWall.cleanup();
 
