@@ -437,6 +437,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
 
         glm::vec3 roomCenter = glm::vec3(room.startX + room.width / 2, ROOM_CEILING_HEIGHT,
                                          room.startY + room.depth / 2);
+        printf("POSITION %f %f %f\n", roomCenter.x, roomCenter.y, roomCenter.z);
+
         positionedLightPos->push_back(roomCenter);
         roomCenters->push_back(roomCenter - glm::vec3(0.0f, ROOM_CEILING_HEIGHT, 0.0f));
 
@@ -1548,9 +1550,9 @@ protected:
 
         //OFFSCREEN
         // Matrix from light's point of view
-        glm::vec3 lightPos(0.0f, 5.0f, 0.0f);
+        glm::vec3 lightPos(7.131756f, 3.000000f, 7.448379f);
         glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(45.0f), 1.0f, 1.0f, 96.0f);
-        glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0, 1, 0));
+        glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0, -1, 0));
 
         guboOffscreen.depthMVP = depthProjectionMatrix * depthViewMatrix;
         DSGuboOffscreen.map(currentImage, &guboOffscreen, sizeof(guboOffscreen), 0);
