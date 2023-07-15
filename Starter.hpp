@@ -322,6 +322,7 @@ struct DescriptorSetLayoutBinding {
 
 struct DescriptorSetLayout {
 	BaseProject *BP;
+    std::vector<DescriptorSetLayoutBinding> B;
  	VkDescriptorSetLayout descriptorSetLayout;
 
  	void init(BaseProject *bp, std::vector<DescriptorSetLayoutBinding> B);
@@ -3306,6 +3307,7 @@ void Pipeline::cleanup() {
 
 void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutBinding> B) {
 	BP = bp;
+    this->B = B;
 
     bool POIFlag = false;
 
@@ -3332,7 +3334,7 @@ void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutB
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());;
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 	layoutInfo.pBindings = bindings.data();
 
     if(POIFlag) {
@@ -3424,49 +3426,67 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 	}
 
 	for (size_t i = 0; i < BP->swapChainImages.size(); i++) {
-		std::vector<VkWriteDescriptorSet> descriptorWrites(E.size());
+        std::map<int, std::vector<VkDescriptorImageInfo>> textureBindingMap;
+
+		std::vector<VkWriteDescriptorSet> descriptorWrites;
+        descriptorWrites.reserve(E.size());
+
 		std::vector<VkDescriptorBufferInfo> bufferInfo(E.size());
-		std::vector<VkDescriptorImageInfo> imageInfo(E.size());
 		for (int j = 0; j < E.size(); j++) {
 			if(E[j].type == UNIFORM) {
 				bufferInfo[j].buffer = uniformBuffers[j][i];
 				bufferInfo[j].offset = 0;
 				bufferInfo[j].range = E[j].size;
 
-				descriptorWrites[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrites[j].dstSet = descriptorSets[i];
-				descriptorWrites[j].dstBinding = E[j].binding;
-				descriptorWrites[j].dstArrayElement = 0;
-				descriptorWrites[j].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				descriptorWrites[j].descriptorCount = 1;
-				descriptorWrites[j].pBufferInfo = &bufferInfo[j];
+                auto& descriptor = descriptorWrites.emplace_back();
+				descriptor.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptor.dstSet = descriptorSets[i];
+				descriptor.dstBinding = E[j].binding;
+				descriptor.dstArrayElement = 0;
+				descriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptor.descriptorCount = 1;
+				descriptor.pBufferInfo = &bufferInfo[j];
 			} else if(E[j].type == TEXTURE) {
-				imageInfo[j].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				imageInfo[j].imageView = E[j].tex->textureImageView;
-				imageInfo[j].sampler = E[j].tex->textureSampler;
+                VkDescriptorImageInfo imageInfoElement;
+                imageInfoElement.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                imageInfoElement.imageView = E[j].tex->textureImageView;
+                imageInfoElement.sampler = E[j].tex->textureSampler;
 
-				descriptorWrites[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrites[j].dstSet = descriptorSets[i];
-				descriptorWrites[j].dstBinding = E[j].binding;
-				descriptorWrites[j].dstArrayElement = E[j].texDstArrayElement;
-				descriptorWrites[j].descriptorType =
-											VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				descriptorWrites[j].descriptorCount = 1;
-				descriptorWrites[j].pImageInfo = &imageInfo[j];
+                if(textureBindingMap.find(E[j].binding) == textureBindingMap.end()) {
+                    //auto& imageInfo = textureBindingMap[E[j].binding];
+                    std::vector<VkDescriptorImageInfo> imageInfo;
+                    imageInfo.reserve(DSL->B[E[j].binding].count);
+
+                    auto& descriptor = descriptorWrites.emplace_back();
+                    descriptor.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    descriptor.dstSet = descriptorSets[i];
+                    descriptor.dstBinding = E[j].binding;
+                    descriptor.dstArrayElement = 0;
+                    descriptor.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    descriptor.descriptorCount = DSL->B[E[j].binding].count;
+                    descriptor.pImageInfo = imageInfo.data();
+
+                    imageInfo.push_back(imageInfoElement);
+                    textureBindingMap[E[j].binding] = std::move(imageInfo);
+                } else {
+                    auto& test = textureBindingMap[E[j].binding];
+                    test.push_back(imageInfoElement);
+                }
 			} else if(E[j].type == SHADOW_MAP) {
-                imageInfo[j].imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-                imageInfo[j].sampler = E[j].shadow->sampler;
-                imageInfo[j].imageView = E[j].shadow->imageView;
-                imageInfo[j].imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+                VkDescriptorImageInfo imageInfoElement{};
+                imageInfoElement.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+                imageInfoElement.sampler = E[j].shadow->sampler;
+                imageInfoElement.imageView = E[j].shadow->imageView;
+                imageInfoElement.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 
-                descriptorWrites[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                descriptorWrites[j].dstSet = descriptorSets[i];
-                descriptorWrites[j].dstBinding = E[j].binding;
-                descriptorWrites[j].dstArrayElement = E[j].texDstArrayElement;
-                descriptorWrites[j].descriptorType =
-                        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                descriptorWrites[j].descriptorCount = 1;
-                descriptorWrites[j].pImageInfo = &imageInfo[j];
+                auto& descriptor = descriptorWrites.emplace_back();
+                descriptor.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                descriptor.dstSet = descriptorSets[i];
+                descriptor.dstBinding = E[j].binding;
+                descriptor.dstArrayElement = E[j].texDstArrayElement;
+                descriptor.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                descriptor.descriptorCount = 1;
+                descriptor.pImageInfo = &imageInfoElement;
             }
 		}
 		vkUpdateDescriptorSets(BP->device,
