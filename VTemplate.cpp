@@ -997,7 +997,7 @@ protected:
         //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderVertInstanced.spv", "shaders/ShaderFraInstanced.spv",
-                            {&DSLGubo, &DSLDoor, &DSLPositionedLights});
+                            {&DSLGubo, &DSLHouseBindings, &DSLDoor, &DSLPositionedLights});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         // Models, textures and Descriptors (values assigned to the uniforms)
@@ -1311,8 +1311,9 @@ protected:
         //--- PIPELINE INSTANCED ---
         PMeshInstanced.bind(commandBuffer);
         DSGubo.bind(commandBuffer, PMeshInstanced, 0, currentImage);
-        DSDoor.bind(commandBuffer, PMeshInstanced, 1, currentImage);
-        DSPositionedLights.bind(commandBuffer, PMeshInstanced, 2, currentImage);
+        DSHouseBindings.bind(commandBuffer, PMeshInstanced, 1, currentImage);
+        DSDoor.bind(commandBuffer, PMeshInstanced, 2, currentImage);
+        DSPositionedLights.bind(commandBuffer, PMeshInstanced, 3, currentImage);
 
         MDoor.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1, 0, 0, 0);

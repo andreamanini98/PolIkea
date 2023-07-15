@@ -4,7 +4,7 @@
 #define N_ROOMS 5
 #define N_POS_LIGHTS 9
 
-layout(std140, set = 1, binding = 0) uniform UniformBufferObject {
+layout(std140, set = 2, binding = 0) uniform UniformBufferObject {
 	float amb;
 	float gamma;
 	vec3 sColor;
@@ -12,7 +12,7 @@ layout(std140, set = 1, binding = 0) uniform UniformBufferObject {
     vec4 door[N_ROOMS-1];
 } ubo;
 
-layout(std140, set = 2, binding = 0) uniform UniformBlockPositionedLights {
+layout(std140, set = 3, binding = 0) uniform UniformBlockPositionedLights {
 	float amb;
 	float gamma;
 	vec3 sColor;
