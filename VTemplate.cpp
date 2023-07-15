@@ -156,6 +156,10 @@ struct OverlayUniformBlock {
     alignas(4) float visible;
 };
 
+struct HouseBindings {
+    BoundingRectangle roomsArea[N_ROOMS];
+};
+
 
 // ----- VERTEX STRUCT ----- //
 
@@ -722,7 +726,7 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLPositionedLights, DSLGubo, DSLOverlay, DSLVertexWithColors;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLPositionedLights, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLHouseBindings;
 
     // Vertex formats
     VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced;
@@ -739,13 +743,14 @@ protected:
     Model<VertexWithTextID> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
+    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSHouseBindings;
     // Textures
     Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones;
     // C++ storage for uniform variables
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
+    HouseBindings uboHouseBindings;
 
     // Other application parameters
     // A vector containing one element for each model loaded where we want to keep track of its information
@@ -819,6 +824,9 @@ protected:
                 //                  using the corresponding Vulkan constant
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
+        });
+        DSLHouseBindings.init(this, {
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS}
         });
         DSLMeshMultiTex.init(this, {
                 // This array contains the bindings:
@@ -974,7 +982,7 @@ protected:
         // Third and fourth parameters are respectively the vertex and fragment shaders
         // The last array, is a vector of pointer to the layouts of the sets that will
         // be used in this pipeline. The first element will be set 0, and so on
-        PMesh.init(this, &VMesh, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLMesh});
+        PMesh.init(this, &VMesh, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLHouseBindings, &DSLMesh});
         PMesh.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         PMeshMultiTexture.init(this, &VMeshTexID, "shaders/ShaderVertMultiTexture.spv",
@@ -1124,6 +1132,9 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlock),      nullptr},
                 {1, TEXTURE, 0,                         &TFence}
         });
+        DSHouseBindings.init(this, &DSLHouseBindings, {
+                {0, UNIFORM, sizeof(HouseBindings),      nullptr}
+        });
         DSGubo.init(this, &DSLGubo, {
                 {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr}
         });
@@ -1177,6 +1188,7 @@ protected:
         DSDoor.cleanup();
         DSPositionedLights.cleanup();
         DSBuilding.cleanup();
+        DSHouseBindings.cleanup();
 
         for (auto &mInfo: MV)
             mInfo.dsModel.cleanup();
@@ -1216,6 +1228,7 @@ protected:
         DSLVertexWithColors.cleanup();
         DSLDoor.cleanup();
         DSLPositionedLights.cleanup();
+        DSLHouseBindings.cleanup();
 
         // Destroys the pipelines
         PMesh.destroy();
@@ -1259,16 +1272,17 @@ protected:
         // This is done automatically in file Starter.hpp, however the command here needs also the index
         // of the current image in the swap chain, passed in its last parameter
         DSGubo.bind(commandBuffer, PMesh, 0, currentImage);
+        DSHouseBindings.bind(commandBuffer, PMesh, 1, currentImage);
 
         //--- GRID ---
         // binds the model
         // For a Model object, this command binds the corresponding index and vertex buffer
         // to the command buffer passed in its parameter
-        DSPolikeaExternFloor.bind(commandBuffer, PMesh, 1, currentImage);
+        DSPolikeaExternFloor.bind(commandBuffer, PMesh, 2, currentImage);
         MPolikeaExternFloor.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaExternFloor.indices.size()), 1, 0, 0, 0);
 
-        DSFence.bind(commandBuffer, PMesh, 1, currentImage);
+        DSFence.bind(commandBuffer, PMesh, 2, currentImage);
         MFence.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFence.indices.size()), 1, 0, 0, 0);
         // the second parameter is the number of indexes to be drawn. For a Model object,
@@ -1276,7 +1290,7 @@ protected:
 
         //--- MODELS ---
         for (auto &mInfo: MV) {
-            mInfo.dsModel.bind(commandBuffer, PMesh, 1, currentImage);
+            mInfo.dsModel.bind(commandBuffer, PMesh, 2, currentImage);
             mInfo.model.bind(commandBuffer);
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
@@ -1559,6 +1573,10 @@ protected:
 
         uboKey.visible = (OnlyMoveCam && displayKey) ? 1.0f : 0.0f;
         DSOverlayMoveOject.map(currentImage, &uboKey, sizeof(uboKey), 0);
+
+        for (int i = 0; i < N_ROOMS; i++)
+            uboHouseBindings.roomsArea[i] = roomOccupiedArea[i];
+        DSHouseBindings.map(currentImage, &uboHouseBindings, sizeof(uboHouseBindings), 0);
 
         uboPolikeaExternFloor.amb = 0.05f;
         uboPolikeaExternFloor.gamma = 180.0f;

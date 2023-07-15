@@ -1,6 +1,6 @@
 struct BoundingRectangle {
-    glm::vec3 bottomLeft;
-    glm::vec3 topRight;
+    alignas(16) glm::vec3 bottomLeft;
+    alignas(16) glm::vec3 topRight;
 };
 
 
