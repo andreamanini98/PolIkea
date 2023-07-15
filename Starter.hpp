@@ -1926,7 +1926,6 @@ protected:
 		}
 		imagesInFlight[imageIndex] = inFlightFences[currentFrame];
 
-		updateUniformBufferOffscreen(imageIndex);
 		updateUniformBuffer(imageIndex);
 
 		VkSubmitInfo submitInfo{};
@@ -1975,7 +1974,6 @@ protected:
     }
 
 	virtual void updateUniformBuffer(uint32_t currentImage) = 0;
-	virtual void updateUniformBufferOffscreen(uint32_t currentImage) = 0;
 
 	virtual void pipelinesAndDescriptorSetsCleanup() = 0;
 	virtual void localCleanup() = 0;

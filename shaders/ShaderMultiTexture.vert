@@ -8,6 +8,7 @@ layout(set = 1, binding = 0) uniform UniformBufferObject {
 	mat4 mvpMat;
 	mat4 worldMat;
 	mat4 nMat;
+	mat4 shadowDepthBiasMVP;
 } ubo;
 
 layout (binding = 2) uniform sampler2D shadowMap;
@@ -29,4 +30,6 @@ void main() {
 	fragNorm = (ubo.nMat * vec4(inNorm, 0.0)).xyz;
 	outUV = inUV;
 	outFragTextureID = inFragTextureID;
+
+	outShadowCoord = ( ubo.shadowDepthBiasMVP ) * vec4(inPosition, 1.0);
 }

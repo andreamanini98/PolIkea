@@ -123,6 +123,7 @@ struct UniformBlock {
     alignas(16) glm::mat4 mvpMat;
     alignas(16) glm::mat4 worldMat;
     alignas(16) glm::mat4 nMat;
+    alignas(16) glm::mat4 lightMVP;
 };
 
 struct UniformBlockDoors {
@@ -156,8 +157,12 @@ struct OverlayUniformBlock {
     alignas(4) float visible;
 };
 
-struct OffscreenUniformBlock {
+struct OffscreenGlobalUniformBlock {
     alignas(16) glm::mat4 depthMVP;
+};
+
+struct OffscreenUniformBlock {
+    alignas(16) glm::mat4 worldMatrix;
 };
 
 // The vertices data structures
@@ -675,6 +680,8 @@ struct ModelInfo {
     Model<Vertex> model;
     DescriptorSet dsModel;
     UniformBlock modelUBO{};
+    DescriptorSet dsModelOffscreen;
+    OffscreenUniformBlock offscreenUBO{};
     glm::vec3 modelPos{};
     float modelRot = 0.0;
     bool hasBeenBought = false;
@@ -725,7 +732,8 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLPositionedLights, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLOffscreen;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLPositionedLights, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLGuboOffscreen;
+    DescriptorSetLayout DSLUboOffscreen;
 
     // Vertex formats
     VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced, VOffscreen;
@@ -742,7 +750,7 @@ protected:
     Model<VertexWithTextID> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSOffscreen;
+    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
     // Textures
     Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones;
     // C++ storage for uniform variables
@@ -750,7 +758,8 @@ protected:
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
 
-    OffscreenUniformBlock uboOffscreen;
+    DescriptorSet DSGuboOffscreen;
+    OffscreenGlobalUniformBlock guboOffscreen;
 
     // Other application parameters
     // A vector containing one element for each model loaded where we want to keep track of its information
@@ -862,7 +871,11 @@ protected:
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
 
-        DSLOffscreen.init(this, {
+        DSLGuboOffscreen.init(this, {
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_VERTEX_BIT}
+        });
+
+        DSLUboOffscreen.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_VERTEX_BIT}
         });
 
@@ -1009,7 +1022,7 @@ protected:
                             {&DSLGubo, &DSLDoor, &DSLPositionedLights});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        POffscreen.init(this, &VOffscreen, "shaders/ShaderVertOffscreen.spv", {}, {&DSLOffscreen});
+        POffscreen.init(this, &VOffscreen, "shaders/ShaderVertOffscreen.spv", {}, {&DSLGuboOffscreen, &DSLUboOffscreen});
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
@@ -1162,8 +1175,8 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlockPositionedLights), nullptr}
         });
 
-        DSOffscreen.init(this, &DSLOffscreen, {
-                {0, UNIFORM, sizeof(OffscreenUniformBlock), nullptr}
+        DSGuboOffscreen.init(this, &DSLGuboOffscreen, {
+                {0, UNIFORM, sizeof(OffscreenGlobalUniformBlock), nullptr}
         });
 
         DSBuilding.init(this, &DSLMeshMultiTex, {
@@ -1180,6 +1193,9 @@ protected:
             mInfo.dsModel.init(this, &DSLMesh, {
                     {0, UNIFORM, sizeof(UniformBlock),      nullptr},
                     {1, TEXTURE, 0,                         &TFurniture}
+            });
+            mInfo.dsModelOffscreen.init(this, &DSLUboOffscreen, {
+                    {0, UNIFORM, sizeof(OffscreenUniformBlock),      nullptr}
             });
         }
     }
@@ -1257,21 +1273,21 @@ protected:
 
     void populateOffscreenCommandBuffer(VkCommandBuffer commandBuffer, int currentImage) {
         POffscreen.bind(commandBuffer);
-        DSOffscreen.bind(commandBuffer, POffscreen, 0, currentImage);
+        DSGuboOffscreen.bind(commandBuffer, POffscreen, 0, currentImage);
 
         //TODO map bulding world
-        MBuilding.bindHacky(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
+        //MBuilding.bindHacky(commandBuffer);
+        //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
 
         //TODO map bulding world
-        MPolikeaExternFloor.bindHacky(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaExternFloor.indices.size()), 1, 0, 0, 0);
+        //MPolikeaExternFloor.bindHacky(commandBuffer);
+        //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaExternFloor.indices.size()), 1, 0, 0, 0);
 
         //TODO map bulding world
-        MFence.bindHacky(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFence.indices.size()), 1, 0, 0, 0);
-
+        //MFence.bindHacky(commandBuffer);
+        //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFence.indices.size()), 1, 0, 0, 0);
         for (auto &mInfo: MV) {
+            mInfo.dsModelOffscreen.bind(commandBuffer, POffscreen, 1, currentImage);
             mInfo.model.bindHacky(commandBuffer);
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
@@ -1352,16 +1368,6 @@ protected:
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1, 0, 0, 0);
         MPositionedLights.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, 0);
-    }
-
-    void updateUniformBufferOffscreen(uint32_t currentImage) {
-        // Matrix from light's point of view
-        glm::vec3 lightPos(0.0f, 5.0f, 0.0f);
-        glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(45.0f), 1.0f, 1.0f, 96.0f);
-        glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0, 1, 0));
-
-        uboOffscreen.depthMVP = depthProjectionMatrix * depthViewMatrix;
-        DSOffscreen.map(currentImage, &uboOffscreen, sizeof(uboOffscreen), 0);
     }
 
     // Here is where you update the uniforms.
@@ -1540,6 +1546,16 @@ protected:
             CamAlpha = CamBeta = CamRho = 0.0f;
         }
 
+        //OFFSCREEN
+        // Matrix from light's point of view
+        glm::vec3 lightPos(0.0f, 5.0f, 0.0f);
+        glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(45.0f), 1.0f, 1.0f, 96.0f);
+        glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0, 1, 0));
+
+        guboOffscreen.depthMVP = depthProjectionMatrix * depthViewMatrix;
+        DSGuboOffscreen.map(currentImage, &guboOffscreen, sizeof(guboOffscreen), 0);
+
+        //ONSCREEN
         gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
         gubo.DlightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
         gubo.AmbLightColor = glm::vec3(1.0f);
@@ -1662,7 +1678,9 @@ protected:
             mInfo.modelUBO.worldMat = World;
             mInfo.modelUBO.nMat = glm::inverse(World);
             mInfo.modelUBO.mvpMat = ViewPrj * World;
+            mInfo.modelUBO.lightMVP = guboOffscreen.depthMVP;
             mInfo.dsModel.map(currentImage, &mInfo.modelUBO, sizeof(mInfo.modelUBO), 0);
+            mInfo.offscreenUBO.worldMatrix = World;
         }
     }
 };
