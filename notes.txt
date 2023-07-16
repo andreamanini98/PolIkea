@@ -65,7 +65,7 @@ Okkio alla linea 1948!!
 
 Linea 2373: deve creare l'instance buffer come fatto ad esempio per il vertex buffer, più sotto dovrà anche distruggerlo.
 
-Linea 2446: devo ancora vedere come mai mette 1 e 1 nel vkCmdBindVertexBuffers.
+Linea 2446: in pratica mette 1 nel parametro firstBinding di vkCmdBindVertexBuffers perchè quello indica il numero del bind da usare nel vertex descriptor: questi infatti devono coincidere. Ricordati che questo l'ha fatto per passare più agevolmente i parametri nello shader.
 
 
 
