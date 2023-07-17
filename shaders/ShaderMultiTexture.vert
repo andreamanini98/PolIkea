@@ -24,6 +24,12 @@ layout(location = 2) out vec2 outUV;
 layout(location = 3) out uint outFragTextureID;
 layout (location = 4) out vec4 outShadowCoord;
 
+const mat4 biasMat = mat4(
+	0.5, 0.0, 0.0, 0.0,
+	0.0, 0.5, 0.0, 0.0,
+	0.0, 0.0, 1.0, 0.0,
+	0.5, 0.5, 0.0, 1.0 );
+
 void main() {
 	gl_Position = ubo.mvpMat * vec4(inPosition, 1.0);
 	fragPos = (ubo.worldMat * vec4(inPosition, 1.0)).xyz;
@@ -31,5 +37,5 @@ void main() {
 	outUV = inUV;
 	outFragTextureID = inFragTextureID;
 
-	outShadowCoord = ( ubo.shadowDepthBiasMVP ) * vec4(inPosition, 1.0);
+	outShadowCoord = ( biasMat * ubo.shadowDepthBiasMVP ) * ubo.worldMat * vec4(inPosition, 1.0);
 }

@@ -736,7 +736,7 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLPositionedLights, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLGuboOffscreen;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLPositionedLights, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLGuboOffscreen,DSLQuad;
     DescriptorSetLayout DSLUboOffscreen;
 
     // Vertex formats
@@ -754,7 +754,7 @@ protected:
     Model<VertexWithTextID> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding;
+    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSQuad;
     // Textures
     Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones;
     // C++ storage for uniform variables
@@ -869,6 +869,9 @@ protected:
         DSLOverlay.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
+        });
+        DSLQuad.init(this, {
+                {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
         });
         // TODO may bring the DSLVertexWithColors to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
         DSLVertexWithColors.init(this, {
@@ -1017,6 +1020,9 @@ protected:
 
         POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
+
+        PQuad.init(this, &VQuad, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLQuad});
+        PQuad.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         PVertexWithColors.init(this, &VVertexWithColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv",
                                {&DSLGubo, &DSLVertexWithColors});
@@ -1191,6 +1197,10 @@ protected:
                 {1, TEXTURE, 0,                         &TDarkFloor, std::nullopt,   3},
                 {1, TEXTURE, 0,                         &TTiledStones, std::nullopt, 4},
                 {2, SHADOW_MAP, 0, nullptr, Shadow{offscreenPass.depth.view, offscreenPass.depthSampler}}
+        });
+
+        DSQuad.init(this, &DSLQuad, {
+                {0, SHADOW_MAP, 0, nullptr, Shadow{offscreenPass.depth.view, offscreenPass.depthSampler}}
         });
 
         for (auto &mInfo: MV) {
@@ -1552,10 +1562,25 @@ protected:
 
         //OFFSCREEN
         // Matrix from light's point of view
-        glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(45.0f), 1.0f, 1.0f, 96.0f);
-        glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0, -1, 0));
+        float n = 0.1;
+        float f = 50.0;
+        float tetha = glm::radians(60.0f);
+        glm::vec3 Z = glm::vec3(0, 0, 0); // Used to negate the Pos vector
 
-        guboOffscreen.depthMVP = depthProjectionMatrix * depthViewMatrix;
+        glm::mat4 P = glm::mat4(1 / (Ar * tan(tetha / 2)), 0, 0, 0,
+                                0, -1 / (tan(tetha / 2)), 0, 0,
+                                0, 0, f / (n - f), -1,
+                                0, 0, n * f / (n - f), 0);
+
+        glm::mat4 M = glm::rotate(glm::mat4(1.0), 0.0f, glm::vec3(0, 0, 1)) *
+                      glm::rotate(glm::mat4(1.0), 3.14f/2, glm::vec3(1, 0, 0)) *
+                      glm::rotate(glm::mat4(1.0), 0.0f, glm::vec3(0, 1, 0)) *
+                      glm::translate(glm::mat4(1.0), Z - lightPos);
+
+        glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(45.0f), 1.0f, 1.0f, 96.0f);
+        glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0, 1, 0));
+
+        guboOffscreen.depthMVP = P*M;
         DSGuboOffscreen.map(currentImage, &guboOffscreen, sizeof(guboOffscreen), 0);
 
         //ONSCREEN
