@@ -324,10 +324,7 @@ public:
                     BoundingRectangle{v1 + bOffset, openingV1 + tOffset});
         }
 
-        printf("%f %f %f\n", openingV0.x, openingV0.y, openingV0.z);
-
-        if (/*doorIndices.find(openingV0) == doorIndices.end()*/ doorDirection == NORTH || doorDirection == EAST) {
-            //doorIndices.insert(openingV0);
+        if (doorDirection == NORTH || doorDirection == EAST) {
             float rotType;
             if (doorDirection == NORTH || doorDirection == SOUTH) {
                 rotType = glm::radians(0.0f);
@@ -418,8 +415,9 @@ inline std::vector<Room> generateFloorplan(float dimension) {
     return std::move(rooms);
 }
 
-inline void
-floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithTextID> &vPos, std::vector<uint32_t> &vIdx,
+bool firstLight = true;
+glm::vec3 lightPos;
+inline void floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithTextID> &vPos, std::vector<uint32_t> &vIdx,
                       std::vector<OpenableDoor> &openableDoors, std::vector<BoundingRectangle> *bounds,
                       std::vector<glm::vec3> *positionedLightPos, std::vector<glm::vec3> *roomCenters,
                       std::vector<BoundingRectangle> *roomOccupiedArea) {
@@ -438,6 +436,10 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
         glm::vec3 roomCenter = glm::vec3(room.startX + room.width / 2, ROOM_CEILING_HEIGHT,
                                          room.startY + room.depth / 2);
         printf("POSITION %f %f %f\n", roomCenter.x, roomCenter.y, roomCenter.z);
+        if(firstLight) {
+            lightPos = roomCenter;
+            firstLight = false;
+        }
 
         positionedLightPos->push_back(roomCenter);
         roomCenters->push_back(roomCenter - glm::vec3(0.0f, ROOM_CEILING_HEIGHT, 0.0f));
@@ -1550,7 +1552,6 @@ protected:
 
         //OFFSCREEN
         // Matrix from light's point of view
-        glm::vec3 lightPos(7.131756f, 3.000000f, 7.448379f);
         glm::mat4 depthProjectionMatrix = glm::perspective(glm::radians(45.0f), 1.0f, 1.0f, 96.0f);
         glm::mat4 depthViewMatrix = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0, -1, 0));
 

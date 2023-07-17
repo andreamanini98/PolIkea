@@ -55,7 +55,6 @@
 
 // 16 bits of depth is enough for such a small scene
 #define DEPTH_FORMAT VK_FORMAT_D16_UNORM
-#define SHADOWMAP_DIM 2048
 #define DEFAULT_SHADOWMAP_FILTER VK_FILTER_LINEAR
 
 using json = nlohmann::json;
@@ -1094,7 +1093,7 @@ protected:
         VkImageView view;
     };
     struct OffscreenPass {
-        int32_t width, height;
+        uint32_t width, height;
         VkFramebuffer frameBuffer;
         FrameBufferAttachment depth;
         VkRenderPass renderPass;
@@ -1120,8 +1119,8 @@ protected:
     // The depth attachment of this framebuffer will then be used to sample from in the fragment shader of the shadowing pass
     void prepareOffscreenFramebuffer()
     {
-        offscreenPass.width = SHADOWMAP_DIM;
-        offscreenPass.height = SHADOWMAP_DIM;
+        offscreenPass.width = swapChainExtent.width;
+        offscreenPass.height = swapChainExtent.height;
 
         // For shadow mapping we only need a depth attachment
         VkImageCreateInfo image {};
@@ -2988,8 +2987,8 @@ void Pipeline::createOffscreen() {
 	VkViewport viewport{};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
-	viewport.width = SHADOWMAP_DIM;
-	viewport.height = SHADOWMAP_DIM;
+	viewport.width = BP->offscreenPass.width;
+	viewport.height = BP->offscreenPass.height;
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 
