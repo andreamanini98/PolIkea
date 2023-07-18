@@ -902,33 +902,8 @@ protected:
                    });
 
         VMeshTexID.init(this, {
-                // This array contains the bindings:
-                // first  element : the binding number
-                // second element : the stride of this binding
-                // third  element : whether this parameter changes per vertex or per instance
-                //                  using the corresponding Vulkan constant
                 {0, sizeof(VertexWithTextID), VK_VERTEX_INPUT_RATE_VERTEX}
         }, {
-                                // This array contains the location:
-                                // first  element : the binding number
-                                // second element : the location number
-                                // third  element : the offset of this element in the memory record
-                                // fourth element : the data type of the element
-                                //                  using the corresponding Vulkan constant
-                                // fifth  element : the size in byte of the element
-                                // sixth  element : a constant defining the element usage
-                                //                   POSITION - a vec3 with the position
-                                //                   NORMAL   - a vec3 with the normal vector
-                                //                   UV       - a vec2 with a UV coordinate
-                                //                   COLOR    - a vec4 with a RGBA color
-                                //                   TANGENT  - a vec4 with the tangent vector
-                                //                   OTHER    - anything else
-                                //
-                                // ***************** DOUBLE CHECK ********************
-                                //  That the Vertex data structure you use in the "offsetoff" and
-                                //	in the "sizeof" in the previous array, refers to the correct one,
-                                //	if you have more than one vertex format!
-                                // ***************************************************
                                 {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexWithTextID, pos),
                                         sizeof(glm::vec3), POSITION},
                                 {0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VertexWithTextID, norm),
@@ -1058,16 +1033,15 @@ protected:
     inline void
     loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMesh, std::vector<ModelInfo> *MV) {
         int i = 0;
-        int polikeaBuildingOffsetsIndex = 0;
-        bool loadingInPolikeaBuilding = path.find("furniture") != std::string::npos;
+        static int polikeaBuildingOffsetsIndex = 0;
+        //bool loadingInPolikeaBuilding = path.find("furniture") != std::string::npos;
 
         for (const auto &entry: fs::directory_iterator(path)) {
             // Added this check since in MacOS this hidden file could be created in a directory
             if (static_cast<std::string>(entry.path()).find("DS_Store") != std::string::npos)
                 continue;
 
-            // TODO this is only to skip other lights
-            if (static_cast<std::string>(entry.path()).find("lamp") != std::string::npos)
+            if (static_cast<std::string>(entry.path()).find("polilamp") != std::string::npos)
                 continue;
 
             ModelInfo MI;
@@ -1075,13 +1049,13 @@ protected:
             // The third parameter is the file name
             // The last is a constant specifying the file type: currently only OBJ or GLTF
             MI.model.init(thisVTemplate, VMesh, entry.path(), MGCG);
-            if (polikeaBuildingOffsetsIndex < MAX_OBJECTS_IN_POLIKEA && loadingInPolikeaBuilding) {
+            if (polikeaBuildingOffsetsIndex < MAX_OBJECTS_IN_POLIKEA) {
                 MI.modelPos = polikeaBuildingPosition + polikeaBuildingOffsets[polikeaBuildingOffsetsIndex];
                 polikeaBuildingOffsetsIndex++;
             } else {
                 MI.modelPos = glm::vec3(0.0f + i * 2, 0.0f, 0.0f);
             }
-            if (MAX_OBJECTS_IN_POLIKEA - polikeaBuildingOffsetsIndex < 3 && loadingInPolikeaBuilding) {
+            if (MAX_OBJECTS_IN_POLIKEA - polikeaBuildingOffsetsIndex < 3) {
                 MI.modelRot = glm::radians(180.0f);
             } else {
                 MI.modelRot = 0.0f;

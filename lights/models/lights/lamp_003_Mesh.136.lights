@@ -7,10 +7,10 @@
     "dir_y": 1,
     "dir_z": 0,
     "spot": {
-        "beta": 3.5,
-        "g": 3,
-        "cosout": 0.65,
-        "cosin": 0.85
+        "beta": 0.5,
+        "g": 2,
+        "cosout": 0.55,
+        "cosin": 0.95
     }
 },
 {
@@ -21,10 +21,10 @@
     "dir_y": -1,
     "dir_z": 0,
     "spot": {
-        "beta": 3.5,
-        "g": 3,
-        "cosout": 0.65,
-        "cosin": 0.85
+        "beta": 2.5,
+        "g": 2,
+        "cosout": 0.55,
+        "cosin": 0.95
     }
 }
 ]

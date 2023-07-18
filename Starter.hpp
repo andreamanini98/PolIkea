@@ -231,7 +231,6 @@ struct LightParameters {
         PointLightParameters point;
         SpotLightParameters spot;
     } parameters;
-    bool lightInPolikea;
 };
 class Empty {};
 template <class Vert, class Instance = Empty>

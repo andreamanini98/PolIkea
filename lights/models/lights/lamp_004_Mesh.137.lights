@@ -7,11 +7,11 @@
         "dir_y": 1,
         "dir_z": -0.8,
         "spot": {
-            "beta": 0.8,
-            "g": 0.8,
-            "cosout": 1,
-            "cosin": 1.0,
-            "intensity": 3.0
+            "beta": 2,
+            "g": 1.8,
+            "cosout": 0.85,
+            "cosin": 0.9,
+            "intensity": 4.0
         }
     }
 ]
