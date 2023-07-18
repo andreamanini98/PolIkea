@@ -736,20 +736,21 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLPositionedLights, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLGuboOffscreen,DSLQuad;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLPositionedLights, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLGuboOffscreen, DSLQuad;
     DescriptorSetLayout DSLUboOffscreen;
 
     // Vertex formats
-    VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced, VOffscreen;
+    VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced, VOffscreen, VQuad;
 
     // Pipelines [Shader couples]
-    Pipeline PMesh, PMeshMultiTexture, POverlay, PVertexWithColors, PMeshInstanced, POffscreen;
+    Pipeline PMesh, PMeshMultiTexture, POverlay, PVertexWithColors, PMeshInstanced, POffscreen, PQuad;
 
     // Models, textures and Descriptors (values assigned to the uniforms)
     // Please note that Model objects depends on the corresponding vertex structure
     // Models
     Model<Vertex> MPolikeaExternFloor, MFence;
     Model<VertexOverlay> MOverlay;
+    Model<VertexOverlay> MQuad;
     Model<VertexVColor> MPolikeaBuilding;
     Model<VertexWithTextID> MBuilding;
 
@@ -970,6 +971,15 @@ protected:
                                       sizeof(glm::vec2), UV}
                       });
 
+        VQuad.init(this, {
+                {0, sizeof(VertexOverlay), VK_VERTEX_INPUT_RATE_VERTEX}
+        }, {
+                              {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(VertexOverlay, pos),
+                                      sizeof(glm::vec2), OTHER},
+                              {0, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(VertexOverlay, UV),
+                                      sizeof(glm::vec2), UV}
+                      });
+
         VVertexWithColor.init(this, {
                 {0, sizeof(VertexVColor), VK_VERTEX_INPUT_RATE_VERTEX}
         }, {
@@ -1021,7 +1031,7 @@ protected:
         POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PQuad.init(this, &VQuad, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLQuad});
+        PQuad.init(this, &VQuad, "shaders/testVert.spv", "shaders/testFrag.spv", {&DSLQuad});
         PQuad.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         PVertexWithColors.init(this, &VVertexWithColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv",
@@ -1054,6 +1064,13 @@ protected:
                              {{0.7f,  0.93f}, {1.0f, 1.0f}}};
         MOverlay.indices = {0, 1, 2, 3, 2, 1};
         MOverlay.initMesh(this, &VOverlay);
+
+        MQuad.vertices = {{{-1.0f, -1.0f}, {0.0f, 0.0f}},
+                             {{-0.5f, -1.0f}, {0.0f, 1.0f}},
+                             {{-0.5f,  0.0f}, {1.0f, 0.0f}},
+                             {{-1.0f,  0.0f}, {1.0f, 1.0f}}};
+        MQuad.indices = {0, 1, 2, 3, 2, 1};
+        MQuad.initMesh(this, &VOverlay);
 
 
         auto floorplan = generateFloorplan(MAX_DIMENSION);
@@ -1150,6 +1167,7 @@ protected:
         POverlay.create();
         PVertexWithColors.create();
         PMeshInstanced.create();
+        PQuad.create();
         POffscreen.createOffscreen();
 
         // Here you define the data set
@@ -1223,6 +1241,7 @@ protected:
         POverlay.cleanup();
         PVertexWithColors.cleanup();
         PMeshMultiTexture.cleanup();
+        PQuad.cleanup();
 
         // Cleanup datasets
         DSPolikeaExternFloor.cleanup();
@@ -1233,6 +1252,7 @@ protected:
         DSDoor.cleanup();
         DSPositionedLights.cleanup();
         DSBuilding.cleanup();
+        DSQuad.cleanup();
 
         for (auto &mInfo: MV)
             mInfo.dsModel.cleanup();
@@ -1257,6 +1277,7 @@ protected:
         MPolikeaExternFloor.cleanup();
         MFence.cleanup();
         MOverlay.cleanup();
+        MQuad.cleanup();
         MPolikeaBuilding.cleanup();
         MDoor.cleanup();
         MPositionedLights.cleanup();
@@ -1272,6 +1293,7 @@ protected:
         DSLVertexWithColors.cleanup();
         DSLDoor.cleanup();
         DSLPositionedLights.cleanup();
+        DSLQuad.cleanup();
 
         // Destroys the pipelines
         PMesh.destroy();
@@ -1279,6 +1301,7 @@ protected:
         POverlay.destroy();
         PVertexWithColors.destroy();
         PMeshInstanced.destroy();
+        PQuad.destroy();
     }
 
     // Here it is the creation of the command buffer:
@@ -1382,6 +1405,11 @@ protected:
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1, 0, 0, 0);
         MPositionedLights.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, 0);
+
+        PQuad.bind(commandBuffer);
+        MQuad.bind(commandBuffer);
+        DSQuad.bind(commandBuffer, PQuad, 0, currentImage);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MQuad.indices.size()), 1, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
