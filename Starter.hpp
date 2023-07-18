@@ -2889,12 +2889,12 @@ void Pipeline::cleanup() {
 void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutBinding> B) {
 	BP = bp;
 
-    bool POIFlag = false;
+    //bool POIFlag = false;
 
-    std::vector<VkDescriptorBindingFlagsEXT> descriptorBindingFlags;
+    //std::vector<VkDescriptorBindingFlagsEXT> descriptorBindingFlags;
 	std::vector<VkDescriptorSetLayoutBinding> bindings;
 	bindings.resize(B.size());
-    descriptorBindingFlags.resize(B.size());
+    //descriptorBindingFlags.resize(B.size());
 	for(int i = 0; i < B.size(); i++) {
 		bindings[i].binding = B[i].binding;
 		bindings[i].descriptorType = B[i].type;
@@ -2902,14 +2902,14 @@ void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutB
 		bindings[i].stageFlags = B[i].flags;
 		bindings[i].pImmutableSamplers = nullptr;
 
-        if(B[i].type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER && B[i].count > 1) {
+        /*if(B[i].type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER && B[i].count > 1) {
             printf("!!!!!!!!!!!!!!!!BEFORE IT WAS %d\n", B[i].count);
 
             descriptorBindingFlags.push_back(VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT);
             POIFlag = true;
         } else {
             descriptorBindingFlags.push_back(0);
-        }
+        }*/
 	}
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -2917,7 +2917,7 @@ void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutB
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());;
 	layoutInfo.pBindings = bindings.data();
 
-    if(POIFlag) {
+    /*if(POIFlag) {
         // [POI] The fragment shader will be using an unsized array of samplers, which has to be marked with the VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT
         // In the fragment shader:
         //	layout (set = 0, binding = 1) uniform sampler2D textures[];
@@ -2931,7 +2931,7 @@ void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutB
         layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
         //#endif
         layoutInfo.pNext = &setLayoutBindingFlags;
-    }
+    }*/
 
 	VkResult result = vkCreateDescriptorSetLayout(BP->device, &layoutInfo, nullptr, &descriptorSetLayout);
 	if (result != VK_SUCCESS) {
@@ -2979,14 +2979,14 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 
 	descriptorSets.resize(BP->swapChainImages.size());
 
-    uint32_t textureDynamicSize = 0;
+    /*uint32_t textureDynamicSize = 0;
     for(auto & i : E) {
         if(i.type == TEXTURE) {
             textureDynamicSize ++;
         }
-    }
+    }*/
 
-    std::vector<uint32_t> variableDescCounts(BP->swapChainImages.size());
+    /*std::vector<uint32_t> variableDescCounts(BP->swapChainImages.size());
     if(textureDynamicSize > 1) {
         VkDescriptorSetVariableDescriptorCountAllocateInfoEXT variableDescriptorCountAllocInfo = {};
         variableDescriptorCountAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
@@ -2997,7 +2997,7 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
         variableDescriptorCountAllocInfo.pDescriptorCounts = variableDescCounts.data();
 
         allocInfo.pNext = &variableDescriptorCountAllocInfo;
-    }
+    }*/
 
 	VkResult result = vkAllocateDescriptorSets(BP->device, &allocInfo, descriptorSets.data());
 	if (result != VK_SUCCESS) {
