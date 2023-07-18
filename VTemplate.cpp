@@ -971,14 +971,7 @@ protected:
                                       sizeof(glm::vec2), UV}
                       });
 
-        VQuad.init(this, {
-                {0, sizeof(VertexOverlay), VK_VERTEX_INPUT_RATE_VERTEX}
-        }, {
-                              {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(VertexOverlay, pos),
-                                      sizeof(glm::vec2), OTHER},
-                              {0, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(VertexOverlay, UV),
-                                      sizeof(glm::vec2), UV}
-                      });
+        VQuad.init(this, {}, {});
 
         VVertexWithColor.init(this, {
                 {0, sizeof(VertexVColor), VK_VERTEX_INPUT_RATE_VERTEX}
