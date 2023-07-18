@@ -1355,8 +1355,6 @@ protected:
                 glm::vec3 oldPos = MV[MoveObjIndex].modelPos;
                 MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(CamPos, CamAlpha, CamBeta, modelPos);
 
-                if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
-
                 for (int i = 0; i < MV.size(); i++) {
                     if (i != MoveObjIndex) {
                         if (MV[MoveObjIndex].checkCollision(MV[i])) {
@@ -1391,6 +1389,11 @@ protected:
                                                 -MV[MoveObjIndex].cylinderRadius)) {
                     MV[MoveObjIndex].modelPos = oldPos;
                 }
+
+                if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
+                float ceilingOverload = MV[MoveObjIndex].modelPos.y + MV[MoveObjIndex].cylinderHeight - ROOM_CEILING_HEIGHT;
+                if (ceilingOverload > 0)
+                    MV[MoveObjIndex].modelPos.y -= ceilingOverload;
             }
         }
 
