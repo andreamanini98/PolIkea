@@ -744,9 +744,11 @@ protected:
     Model<VertexWithTextID> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSHouseBindings;
+    //newnew
+    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveObject, DSOverlayBuyObject, DSPolikeaBuilding, DSBuilding, DSHouseBindings;
     // Textures
-    Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones;
+    //newnew
+    Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones, TOverlayBuyObject;
     // C++ storage for uniform variables
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
@@ -827,7 +829,7 @@ protected:
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
         });
         DSLHouseBindings.init(this, {
-                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS}
+                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
         DSLMeshMultiTex.init(this, {
                 // This array contains the bindings:
@@ -958,7 +960,8 @@ protected:
         // Third and fourth parameters are respectively the vertex and fragment shaders
         // The last array, is a vector of pointer to the layouts of the sets that will
         // be used in this pipeline. The first element will be set 0, and so on
-        PMesh.init(this, &VMesh, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv", {&DSLGubo, &DSLHouseBindings, &DSLMesh});
+        PMesh.init(this, &VMesh, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv",
+                   {&DSLGubo, &DSLHouseBindings, &DSLMesh});
         PMesh.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         PMeshMultiTexture.init(this, &VMeshTexID, "shaders/ShaderVertMultiTexture.spv",
@@ -1010,7 +1013,7 @@ protected:
         // Now we insert 2 more doors for polikea
         doors.push_back(
                 OpenableDoor{
-                        getPolikeaBuildingPosition() + glm::vec3(3.0,0.25,-DOOR_HWIDTH / 2),
+                        getPolikeaBuildingPosition() + glm::vec3(3.0, 0.25, -DOOR_HWIDTH / 2),
                         glm::radians(0.0f),
                         0.0f,
                         glm::radians(90.0f),
@@ -1021,7 +1024,7 @@ protected:
                 });
         doors.push_back(
                 OpenableDoor{
-                        getPolikeaBuildingPosition() + glm::vec3(5.0947,0.25,-DOOR_HWIDTH / 2),
+                        getPolikeaBuildingPosition() + glm::vec3(5.0947, 0.25, -DOOR_HWIDTH / 2),
                         glm::radians(180.0f),
                         0.0f,
                         glm::radians(90.0f),
@@ -1052,6 +1055,8 @@ protected:
         TDarkFloor.init(this, "textures/dark_floor.jpg");
         TTiledStones.init(this, "textures/tiled_stones.jpg");
         TOverlayMoveObject.init(this, "textures/MoveBanner.png");
+        //newnew
+        TOverlayBuyObject.init(this, "textures/buyobject.png");
     }
 
     inline void
@@ -1123,25 +1128,30 @@ protected:
                 // second element : UNIFORM or TEXTURE (an enum) depending on the type
                 // third  element : only for UNIFORMS, the size of the corresponding C++ object. For texture, just put 0
                 // fourth element : only for TEXTURES, the pointer to the corresponding texture object. For uniforms, use nullptr
-                {0, UNIFORM, sizeof(UniformBlock),      nullptr},
-                {1, TEXTURE, 0,                         &TAsphalt}
+                {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                {1, TEXTURE, 0,                    &TAsphalt}
         });
         DSFence.init(this, &DSLMesh, {
-                {0, UNIFORM, sizeof(UniformBlock),      nullptr},
-                {1, TEXTURE, 0,                         &TFence}
+                {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                {1, TEXTURE, 0,                    &TFence}
         });
         DSHouseBindings.init(this, &DSLHouseBindings, {
-                {0, UNIFORM, sizeof(HouseBindings),      nullptr}
+                {0, UNIFORM, sizeof(HouseBindings), nullptr}
         });
         DSGubo.init(this, &DSLGubo, {
                 {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr}
         });
-        DSOverlayMoveOject.init(this, &DSLOverlay, {
+        DSOverlayMoveObject.init(this, &DSLOverlay, {
                 {0, UNIFORM, sizeof(OverlayUniformBlock), nullptr},
                 {1, TEXTURE, 0,                           &TOverlayMoveObject}
         });
+        //newnew
+        DSOverlayBuyObject.init(this, &DSLOverlay, {
+                {0, UNIFORM, sizeof(OverlayUniformBlock), nullptr},
+                {1, TEXTURE, 0,                           &TOverlayBuyObject}
+        });
         DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
-                {0, UNIFORM, sizeof(UniformBlock),      nullptr}
+                {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
         DSDoor.init(this, &DSLDoor, {
                 {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
@@ -1151,18 +1161,18 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlockPositionedLights), nullptr}
         });
         DSBuilding.init(this, &DSLMeshMultiTex, {
-                {0, UNIFORM, sizeof(UniformBlock),      nullptr},
-                {1, TEXTURE, 0,                         &TPlankWall,   0},
-                {1, TEXTURE, 0,                         &TAsphalt,     1},
-                {1, TEXTURE, 0,                         &TBathFloor,   2},
-                {1, TEXTURE, 0,                         &TDarkFloor,   3},
-                {1, TEXTURE, 0,                         &TTiledStones, 4}
+                {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                {1, TEXTURE, 0,                    &TPlankWall,   0},
+                {1, TEXTURE, 0,                    &TAsphalt,     1},
+                {1, TEXTURE, 0,                    &TBathFloor,   2},
+                {1, TEXTURE, 0,                    &TDarkFloor,   3},
+                {1, TEXTURE, 0,                    &TTiledStones, 4}
         });
 
         for (auto &mInfo: MV) {
             mInfo.dsModel.init(this, &DSLMesh, {
-                    {0, UNIFORM, sizeof(UniformBlock),      nullptr},
-                    {1, TEXTURE, 0,                         &TFurniture}
+                    {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                    {1, TEXTURE, 0,                    &TFurniture}
             });
         }
     }
@@ -1181,7 +1191,9 @@ protected:
         DSPolikeaExternFloor.cleanup();
         DSFence.cleanup();
         DSGubo.cleanup();
-        DSOverlayMoveOject.cleanup();
+        //newnew
+        DSOverlayMoveObject.cleanup();
+        DSOverlayBuyObject.cleanup();
         DSPolikeaBuilding.cleanup();
         DSDoor.cleanup();
         DSPositionedLights.cleanup();
@@ -1202,6 +1214,8 @@ protected:
         TFurniture.cleanup();
         TFence.cleanup();
         TOverlayMoveObject.cleanup();
+        //newnew
+        TOverlayBuyObject.cleanup();
         TPlankWall.cleanup();
         TTiledStones.cleanup();
         TDarkFloor.cleanup();
@@ -1296,7 +1310,9 @@ protected:
         // --- PIPELINE OVERLAY ---
         POverlay.bind(commandBuffer);
         MOverlay.bind(commandBuffer);
-        DSOverlayMoveOject.bind(commandBuffer, POverlay, 0, currentImage);
+        //newnew
+        DSOverlayMoveObject.bind(commandBuffer, POverlay, 0, currentImage);
+        DSOverlayBuyObject.bind(commandBuffer, POverlay, 0, currentImage);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MOverlay.indices.size()), 1, 0, 0, 0);
 
         // --- PIPELINE VERTEX WITH COLORS ---
@@ -1415,7 +1431,8 @@ protected:
                 }
 
                 if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
-                float ceilingOverload = MV[MoveObjIndex].modelPos.y + MV[MoveObjIndex].cylinderHeight - ROOM_CEILING_HEIGHT;
+                float ceilingOverload =
+                        MV[MoveObjIndex].modelPos.y + MV[MoveObjIndex].cylinderHeight - ROOM_CEILING_HEIGHT;
                 if (ceilingOverload > 0)
                     MV[MoveObjIndex].modelPos.y -= ceilingOverload;
             }
@@ -1570,7 +1587,8 @@ protected:
         uboPolikea.amb = 0.05f;
         uboPolikea.gamma = 180.0f;
         uboPolikea.sColor = glm::vec3(1.0f);
-        uboPolikea.worldMat = glm::translate(glm::mat4(1), polikeaBuildingPosition) * glm::scale(glm::mat4(1), glm::vec3(5.0f));
+        uboPolikea.worldMat =
+                glm::translate(glm::mat4(1), polikeaBuildingPosition) * glm::scale(glm::mat4(1), glm::vec3(5.0f));
         uboPolikea.nMat = glm::inverse(uboPolikea.worldMat);
         uboPolikea.mvpMat = ViewPrj * uboPolikea.worldMat;
         DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
@@ -1593,7 +1611,16 @@ protected:
         }
 
         uboKey.visible = (OnlyMoveCam && displayKey) ? 1.0f : 0.0f;
-        DSOverlayMoveOject.map(currentImage, &uboKey, sizeof(uboKey), 0);
+        //newnew
+        //if (checkIfInBoundingRectangle(CamPos,
+          //                             BoundingRectangle{glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f,
+            //                                                       polikeaBuildingPosition.z + 0.5f),
+              //                                           glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f,
+                //                                                   polikeaBuildingPosition.z - 20.5f)})) {
+            DSOverlayBuyObject.map(currentImage, &uboKey, sizeof(uboKey), 0);
+        //} else {
+            DSOverlayMoveObject.map(currentImage, &uboKey, sizeof(uboKey), 0);
+        //}
 
         for (int i = 0; i < N_ROOMS; i++)
             uboHouseBindings.roomsArea[i] = roomOccupiedArea[i];
@@ -1636,7 +1663,8 @@ protected:
         DSPositionedLights.map(currentImage, &uboPositionedLights, sizeof(uboPositionedLights), 0);
 
         for (auto &mInfo: MV) {
-            glm::mat4 World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * glm::mat4(1.0f);;
+            glm::mat4 World =
+                    MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * glm::mat4(1.0f);;
             mInfo.modelUBO.amb = 0.05f;
             mInfo.modelUBO.gamma = 180.0f;
             mInfo.modelUBO.sColor = glm::vec3(1.0f);
