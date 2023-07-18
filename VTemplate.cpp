@@ -130,7 +130,7 @@ struct UniformBlockDoors {
     alignas(4) float gamma;
     alignas(16) glm::vec3 sColor;
     alignas(16) glm::mat4 prjViewMat;
-    alignas(16) glm::vec4 door[N_ROOMS - 1];
+    alignas(16) glm::vec4 door[N_ROOMS - 1 + 2]; // We have 2 more doors for polikea
 };
 
 struct UniformBlockPositionedLights {
@@ -339,6 +339,7 @@ public:
                             glm::radians(90.0f),
                             glm::radians(90.0f),
                             CLOSED,
+                            0.0f,
                             CLOCKWISE
                     });
         }
@@ -1005,7 +1006,30 @@ protected:
         MPolikeaBuilding.init(this, &VVertexWithColor, "models/polikeaBuilding.obj", OBJ);
 
         MDoor.instanceBufferPresent = true;
-        MDoor.instances.reserve(doors.size());
+        MDoor.instances.reserve(doors.size() + 2);
+        // Now we insert 2 more doors for polikea
+        doors.push_back(
+                OpenableDoor{
+                        getPolikeaBuildingPosition() + glm::vec3(3.0,0.25,-DOOR_HWIDTH / 2),
+                        glm::radians(0.0f),
+                        0.0f,
+                        glm::radians(90.0f),
+                        glm::radians(90.0f),
+                        CLOSED,
+                        0.0f,
+                        COUNTERCLOCKWISE
+                });
+        doors.push_back(
+                OpenableDoor{
+                        getPolikeaBuildingPosition() + glm::vec3(5.0947,0.25,-DOOR_HWIDTH / 2),
+                        glm::radians(180.0f),
+                        0.0f,
+                        glm::radians(90.0f),
+                        glm::radians(90.0f),
+                        CLOSED,
+                        0.0f,
+                        CLOCKWISE
+                });
         for (auto &door: doors) {
             MDoor.instances.push_back({door.baseRot, door.doorPos, 0});
         }
@@ -1290,7 +1314,7 @@ protected:
         DSPositionedLights.bind(commandBuffer, PMeshInstanced, 3, currentImage);
 
         MDoor.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1, 0, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1 + 2, 0, 0, 0);
         MPositionedLights.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, 0);
     }
@@ -1398,18 +1422,28 @@ protected:
         }
 
         for (auto &Door: doors) {
-            if (glm::distance(CamPos, Door.doorPos) <= 1.5 && Door.doorState == CLOSED) {
+            if (glm::distance(CamPos, Door.doorPos) <= 3.0f && Door.doorState == CLOSED) {
                 Door.doorState = OPENING;
             }
             if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
                 Door.doorState = CLOSING;
             }
             if (Door.doorState == OPENING) {
-                Door.doorRot -= Door.doorSpeed * deltaT;
-                if (Door.doorRot <= -glm::radians(90.0f)) {
-                    Door.doorState = WAITING_OPEN;
-                    Door.doorRot = -glm::radians(90.0f);
+                if (Door.doorOpeningDirection == CLOCKWISE) {
+                    Door.doorRot -= Door.doorSpeed * deltaT;
+                    if (Door.doorRot <= -glm::radians(90.0f)) {
+                        Door.doorState = WAITING_OPEN;
+                        Door.doorRot = -glm::radians(90.0f);
+                    }
                 }
+                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
+                    Door.doorRot += Door.doorSpeed * deltaT;
+                    if (Door.doorRot >= glm::radians(90.0f)) {
+                        Door.doorState = WAITING_OPEN;
+                        Door.doorRot = glm::radians(90.0f);
+                    }
+                }
+
             }
             if (Door.doorState == WAITING_OPEN) {
                 Door.time += deltaT;
@@ -1419,10 +1453,19 @@ protected:
                 }
             }
             if (Door.doorState == CLOSING) {
-                Door.doorRot += Door.doorSpeed * deltaT;
-                if (Door.doorRot >= 0.0f) {
-                    Door.doorState = CLOSED;
-                    Door.doorRot = 0.0f;
+                if (Door.doorOpeningDirection == CLOCKWISE) {
+                    Door.doorRot += Door.doorSpeed * deltaT;
+                    if (Door.doorRot >= 0.0f) {
+                        Door.doorState = CLOSED;
+                        Door.doorRot = 0.0f;
+                    }
+                }
+                if (Door.doorOpeningDirection == COUNTERCLOCKWISE) {
+                    Door.doorRot -= Door.doorSpeed * deltaT;
+                    if (Door.doorRot <= 0.0f) {
+                        Door.doorState = CLOSED;
+                        Door.doorRot = 0.0f;
+                    }
                 }
             }
         }
@@ -1580,7 +1623,7 @@ protected:
         uboDoor.gamma = 180.0f;
         uboDoor.sColor = glm::vec3(1.0f);
         uboDoor.prjViewMat = ViewPrj;
-        for (int i = 0; i < N_ROOMS - 1; i++)
+        for (int i = 0; i < N_ROOMS - 1 + 2; i++)
             uboDoor.door[i] = glm::vec4(doors[i].doorRot);
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
 

@@ -53,7 +53,7 @@ std::vector<BoundingRectangle> getBoundingRectangles(
                               glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f, polikeaBuildingPosition.z - 20.5f)},
             BoundingRectangle{glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f, polikeaBuildingPosition.z + 0.5f),
                               glm::vec3(polikeaBuildingPosition.x + 3.5f, 0.0f, polikeaBuildingPosition.z - 1.5f)},
-            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x + 6.5f, 0.0f, polikeaBuildingPosition.z + 0.5f),
+            BoundingRectangle{glm::vec3(polikeaBuildingPosition.x + 4.4053f, 0.0f, polikeaBuildingPosition.z + 0.5f),
                               glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f, polikeaBuildingPosition.z - 1.5f)},
 
             // Polikea surrounding bounding
