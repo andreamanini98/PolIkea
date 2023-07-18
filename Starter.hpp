@@ -351,7 +351,7 @@ struct Pipeline {
   	void setAdvancedFeatures(VkCompareOp _compareOp, VkPolygonMode _polyModel,
  						VkCullModeFlagBits _CM, bool _transp);
     void createOffscreen();
-  	void create();
+  	void create(bool emptyVertex = false);
   	void destroy();
   	void bind(VkCommandBuffer commandBuffer);
 
@@ -3094,7 +3094,7 @@ void Pipeline::createOffscreen() {
     }
 }
 
-void Pipeline::create() {
+void Pipeline::create(bool emptyVertex) {
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
     vertShaderStageInfo.sType =
     		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -3113,17 +3113,20 @@ void Pipeline::create() {
     		{vertShaderStageInfo, fragShaderStageInfo};
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.sType =
-			VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	auto bindingDescription = VD->getBindingDescription();
-	auto attributeDescriptions = VD->getAttributeDescriptions();
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    auto bindingDescription = VD->getBindingDescription();
+    auto attributeDescriptions = VD->getAttributeDescriptions();
 
-	vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(bindingDescription.size());
-	vertexInputInfo.vertexAttributeDescriptionCount =
-			static_cast<uint32_t>(attributeDescriptions.size());
-	vertexInputInfo.pVertexBindingDescriptions = bindingDescription.data();
-	vertexInputInfo.pVertexAttributeDescriptions =
-			attributeDescriptions.data();
+    if(!emptyVertex) {
+        vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(bindingDescription.size());
+        vertexInputInfo.vertexAttributeDescriptionCount =
+                static_cast<uint32_t>(attributeDescriptions.size());
+        vertexInputInfo.pVertexBindingDescriptions = bindingDescription.data();
+        vertexInputInfo.pVertexAttributeDescriptions =
+                attributeDescriptions.data();
+    } else {
+        printf("WOW\n");
+    }
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
 	inputAssembly.sType =

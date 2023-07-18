@@ -1160,7 +1160,7 @@ protected:
         POverlay.create();
         PVertexWithColors.create();
         PMeshInstanced.create();
-        PQuad.create();
+        PQuad.create(true);
         POffscreen.createOffscreen();
 
         // Here you define the data set
