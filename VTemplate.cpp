@@ -154,6 +154,7 @@ struct GlobalUniformBlock {
 
 struct OverlayUniformBlock {
     alignas(4) float visible;
+    alignas(4) float overlayTex;
 };
 
 struct HouseBindings {
@@ -744,10 +745,8 @@ protected:
     Model<VertexWithTextID> MBuilding;
 
     // Descriptor sets
-    //newnew
-    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveObject, DSOverlayBuyObject, DSPolikeaBuilding, DSBuilding, DSHouseBindings;
+    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveObject, DSPolikeaBuilding, DSBuilding, DSHouseBindings;
     // Textures
-    //newnew
     Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones, TOverlayBuyObject;
     // C++ storage for uniform variables
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
@@ -832,37 +831,24 @@ protected:
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
         DSLMeshMultiTex.init(this, {
-                // This array contains the bindings:
-                // first  element : the binding number
-                // second element : the type of element (buffer or texture)
-                //                  using the corresponding Vulkan constant
-                // third  element : the pipeline stage where it will be used
-                //                  using the corresponding Vulkan constant
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 5},
         });
         DSLDoor.init(this, {
-                // This array contains the bindings:
-                // first  element : the binding number
-                // second element : the type of element (buffer or texture)
-                //                  using the corresponding Vulkan constant
-                // third  element : the pipeline stage where it will be used
-                //                  using the corresponding Vulkan constant
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
         });
         DSLPositionedLights.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
-        // TODO may bring the DSLGUBO to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
         DSLGubo.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
         DSLOverlay.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
-                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
+                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
         });
-        // TODO may bring the DSLVertexWithColors to VK_SHADER_STAGE_FRAGMENT_BIT if it is used only there
         DSLVertexWithColors.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
@@ -1055,8 +1041,7 @@ protected:
         TDarkFloor.init(this, "textures/dark_floor.jpg");
         TTiledStones.init(this, "textures/tiled_stones.jpg");
         TOverlayMoveObject.init(this, "textures/MoveBanner.png");
-        //newnew
-        TOverlayBuyObject.init(this, "textures/buyobject.png");
+        TOverlayBuyObject.init(this, "textures/BuyObject.png");
     }
 
     inline void
@@ -1143,12 +1128,8 @@ protected:
         });
         DSOverlayMoveObject.init(this, &DSLOverlay, {
                 {0, UNIFORM, sizeof(OverlayUniformBlock), nullptr},
-                {1, TEXTURE, 0,                           &TOverlayMoveObject}
-        });
-        //newnew
-        DSOverlayBuyObject.init(this, &DSLOverlay, {
-                {0, UNIFORM, sizeof(OverlayUniformBlock), nullptr},
-                {1, TEXTURE, 0,                           &TOverlayBuyObject}
+                {1, TEXTURE, 0,                           &TOverlayMoveObject},
+                {2, TEXTURE, 0,                           &TOverlayBuyObject}
         });
         DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
@@ -1191,9 +1172,7 @@ protected:
         DSPolikeaExternFloor.cleanup();
         DSFence.cleanup();
         DSGubo.cleanup();
-        //newnew
         DSOverlayMoveObject.cleanup();
-        DSOverlayBuyObject.cleanup();
         DSPolikeaBuilding.cleanup();
         DSDoor.cleanup();
         DSPositionedLights.cleanup();
@@ -1214,7 +1193,6 @@ protected:
         TFurniture.cleanup();
         TFence.cleanup();
         TOverlayMoveObject.cleanup();
-        //newnew
         TOverlayBuyObject.cleanup();
         TPlankWall.cleanup();
         TTiledStones.cleanup();
@@ -1310,9 +1288,7 @@ protected:
         // --- PIPELINE OVERLAY ---
         POverlay.bind(commandBuffer);
         MOverlay.bind(commandBuffer);
-        //newnew
         DSOverlayMoveObject.bind(commandBuffer, POverlay, 0, currentImage);
-        DSOverlayBuyObject.bind(commandBuffer, POverlay, 0, currentImage);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MOverlay.indices.size()), 1, 0, 0, 0);
 
         // --- PIPELINE VERTEX WITH COLORS ---
@@ -1611,16 +1587,17 @@ protected:
         }
 
         uboKey.visible = (OnlyMoveCam && displayKey) ? 1.0f : 0.0f;
-        //newnew
-        //if (checkIfInBoundingRectangle(CamPos,
-          //                             BoundingRectangle{glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f,
-            //                                                       polikeaBuildingPosition.z + 0.5f),
-              //                                           glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f,
-                //                                                   polikeaBuildingPosition.z - 20.5f)})) {
-            DSOverlayBuyObject.map(currentImage, &uboKey, sizeof(uboKey), 0);
-        //} else {
-            DSOverlayMoveObject.map(currentImage, &uboKey, sizeof(uboKey), 0);
-        //}
+        bool buyOrMoveOverlay = displayKey &&
+                                checkIfInBoundingRectangle(
+                                        CamPos,
+                                        BoundingRectangle{
+                                                glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f,
+                                                          polikeaBuildingPosition.z + 0.5f),
+                                                glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f,
+                                                          polikeaBuildingPosition.z - 20.5f)}
+                                );
+        uboKey.overlayTex = buyOrMoveOverlay ? 1.0f : 0.0f;
+        DSOverlayMoveObject.map(currentImage, &uboKey, sizeof(uboKey), 0);
 
         for (int i = 0; i < N_ROOMS; i++)
             uboHouseBindings.roomsArea[i] = roomOccupiedArea[i];
