@@ -1407,9 +1407,10 @@ protected:
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, 0);
 
         PQuad.bind(commandBuffer);
-        MQuad.bind(commandBuffer);
+        //MQuad.bind(commandBuffer);
         DSQuad.bind(commandBuffer, PQuad, 0, currentImage);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MQuad.indices.size()), 1, 0, 0, 0);
+        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MQuad.indices.size()), 1, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
