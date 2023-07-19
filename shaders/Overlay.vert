@@ -2,8 +2,8 @@
 #extension GL_ARB_separate_shader_objects : enable
 
 layout(binding = 0) uniform UniformBufferObject {
-	float visible;
-    float overlayTex;
+	int visible;
+    int overlayTex;
 } ubo;
 
 layout(location = 0) in vec2 inPosition;

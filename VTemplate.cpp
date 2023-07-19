@@ -153,8 +153,8 @@ struct GlobalUniformBlock {
 };
 
 struct OverlayUniformBlock {
-    alignas(4) float visible;
-    alignas(4) float overlayTex;
+    alignas(4) int visible;
+    alignas(4) int overlayTex;
 };
 
 struct HouseBindings {
@@ -1436,7 +1436,6 @@ protected:
                         Door.doorRot = glm::radians(90.0f);
                     }
                 }
-
             }
             if (Door.doorState == WAITING_OPEN) {
                 Door.time += deltaT;
