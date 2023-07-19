@@ -756,10 +756,12 @@ protected:
 
     // Descriptor sets
     DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveOject, DSPolikeaBuilding, DSBuilding, DSQuad;
+    DescriptorSet DSBuildingOffscreen;
     // Textures
     Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones;
     // C++ storage for uniform variables
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
+    OffscreenUniformBlock uboBuildingOffscreen;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboKey;
 
@@ -971,7 +973,14 @@ protected:
                                       sizeof(glm::vec2), UV}
                       });
 
-        VQuad.init(this, {}, {});
+        VQuad.init(this, {
+                {0, sizeof(VertexOverlay), VK_VERTEX_INPUT_RATE_VERTEX}
+        }, {
+                           {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(VertexOverlay, pos),
+                                   sizeof(glm::vec2), OTHER},
+                           {0, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(VertexOverlay, UV),
+                                   sizeof(glm::vec2), UV}
+                   });
 
         VVertexWithColor.init(this, {
                 {0, sizeof(VertexVColor), VK_VERTEX_INPUT_RATE_VERTEX}
@@ -1059,10 +1068,10 @@ protected:
         MOverlay.initMesh(this, &VOverlay);
 
         MQuad.vertices = {{{-1.0f, -1.0f}, {0.0f, 0.0f}},
-                             {{-0.5f, -1.0f}, {0.0f, 1.0f}},
-                             {{-0.5f,  0.0f}, {1.0f, 0.0f}},
+                             {{0.0f, -1.0f}, {0.0f, 1.0f}},
+                             {{0.0f,  0.0f}, {1.0f, 0.0f}},
                              {{-1.0f,  0.0f}, {1.0f, 1.0f}}};
-        MQuad.indices = {0, 1, 2, 3, 2, 1};
+        MQuad.indices = {0, 1, 2, 2, 3, 0};
         MQuad.initMesh(this, &VOverlay);
 
 
@@ -1160,7 +1169,7 @@ protected:
         POverlay.create();
         PVertexWithColors.create();
         PMeshInstanced.create();
-        PQuad.create(true);
+        PQuad.create();
         POffscreen.createOffscreen();
 
         // Here you define the data set
@@ -1187,6 +1196,9 @@ protected:
         });
         DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock),      nullptr}
+        });
+        DSBuildingOffscreen.init(this, &DSLUboOffscreen, {
+                {0, UNIFORM, sizeof(OffscreenUniformBlock), nullptr}
         });
         DSDoor.init(this, &DSLDoor, {
                 {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
@@ -1247,6 +1259,8 @@ protected:
         DSBuilding.cleanup();
         DSQuad.cleanup();
 
+        DSBuildingOffscreen.cleanup();
+
         for (auto &mInfo: MV)
             mInfo.dsModel.cleanup();
     }
@@ -1306,8 +1320,9 @@ protected:
         DSGuboOffscreen.bind(commandBuffer, POffscreen, 0, currentImage);
 
         //TODO map bulding world
-        //MBuilding.bindHacky(commandBuffer);
-        //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
+        DSBuildingOffscreen.bind(commandBuffer, POffscreen, 1, currentImage);
+        MBuilding.bindHacky(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
 
         //TODO map bulding world
         //MPolikeaExternFloor.bindHacky(commandBuffer);
@@ -1400,9 +1415,9 @@ protected:
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, 0);
 
         PQuad.bind(commandBuffer);
-        //MQuad.bind(commandBuffer);
+        MQuad.bind(commandBuffer);
         DSQuad.bind(commandBuffer, PQuad, 0, currentImage);
-        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MQuad.indices.size()), 1, 0, 0, 0);
         //vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MQuad.indices.size()), 1, 0, 0, 0);
     }
 
@@ -1671,6 +1686,8 @@ protected:
         uboBuilding.nMat = glm::inverse(uboBuilding.worldMat);
         uboBuilding.mvpMat = ViewPrj * uboBuilding.worldMat;
         DSBuilding.map(currentImage, &uboBuilding, sizeof(uboBuilding), 0);
+        uboBuildingOffscreen.worldMatrix = uboBuilding.worldMat;
+        DSBuildingOffscreen.map(currentImage, &uboBuildingOffscreen, sizeof(uboBuildingOffscreen), 0);
 
         bool displayKey = false;
         for (std::size_t i = 1; i < MV.size(); ++i) {
