@@ -159,6 +159,7 @@ struct OverlayUniformBlock {
 
 struct HouseBindings {
     BoundingRectangle roomsArea[N_ROOMS];
+    BoundingRectangle externPolikeaBoundings[4];
 };
 
 
@@ -1600,6 +1601,13 @@ protected:
 
         for (int i = 0; i < N_ROOMS; i++)
             uboHouseBindings.roomsArea[i] = roomOccupiedArea[i];
+        for (int i = 0; i < 4; i++) {
+            uboHouseBindings.externPolikeaBoundings[i] = getPolikeaExternalAreaBoundings(
+                    getPolikeaBuildingPosition(),
+                    FRONTOFFSET,
+                    SIDEOFFSET,
+                    BACKOFFSET)[i];
+        }
         DSHouseBindings.map(currentImage, &uboHouseBindings, sizeof(uboHouseBindings), 0);
 
         uboPolikeaExternFloor.amb = 0.05f;
