@@ -948,9 +948,8 @@ protected:
 
         PVertexWithColors.init(this, &VVertexWithColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv",
                                {&DSLGubo, &DSLVertexWithColors});
-        //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderVertInstanced.spv", "shaders/ShaderFraInstanced.spv",
+        PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderInstancedVert.spv", "shaders/ShaderInstancedFrag.spv",
                             {&DSLGubo, &DSLHouseBindings, &DSLDoor});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
