@@ -1026,10 +1026,9 @@ protected:
     }
 
     inline void
-    loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMesh, std::vector<ModelInfo> *MV) {
-        int i = 0;
-        static int polikeaBuildingOffsetsIndex = 0;
-        //bool loadingInPolikeaBuilding = path.find("furniture") != std::string::npos;
+    loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef, std::vector<ModelInfo> *MVRef) {
+        int posOffset = 0;
+        static int polikeaBuildingOffsetsIndex = 0; // Used to count how many objects have been drawn inside polikea
 
         for (const auto &entry: fs::directory_iterator(path)) {
             // Added this check since in MacOS this hidden file could be created in a directory
@@ -1043,18 +1042,14 @@ protected:
             // The second parameter is the pointer to the vertex definition for this model
             // The third parameter is the file name
             // The last is a constant specifying the file type: currently only OBJ or GLTF
-            MI.model.init(thisVTemplate, VMesh, entry.path(), MGCG);
+            MI.model.init(thisVTemplate, VMeshRef, entry.path(), MGCG);
             if (polikeaBuildingOffsetsIndex < MAX_OBJECTS_IN_POLIKEA) {
                 MI.modelPos = polikeaBuildingPosition + polikeaBuildingOffsets[polikeaBuildingOffsetsIndex];
                 polikeaBuildingOffsetsIndex++;
             } else {
-                MI.modelPos = glm::vec3(0.0f + i * 2, 0.0f, 0.0f);
+                MI.modelPos = glm::vec3(0.0f + posOffset * 2, 0.0f, 0.0f);
             }
-            if (MAX_OBJECTS_IN_POLIKEA - polikeaBuildingOffsetsIndex < 3) {
-                MI.modelRot = glm::radians(180.0f);
-            } else {
-                MI.modelRot = 0.0f;
-            }
+            MI.modelRot = (MAX_OBJECTS_IN_POLIKEA - polikeaBuildingOffsetsIndex < 3) ? glm::radians(180.0f) : 0.0f;
 
             MI.minCoords = glm::vec3(std::numeric_limits<float>::max());
             MI.maxCoords = glm::vec3(std::numeric_limits<float>::lowest());
@@ -1072,8 +1067,8 @@ protected:
 
             MI.modelPos += glm::vec3(0.0, -std::min(0.0f, MI.minCoords.y), 0.0);
 
-            MV->push_back(MI);
-            i++;
+            MVRef->push_back(MI);
+            posOffset++;
         }
     }
 
