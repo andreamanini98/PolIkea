@@ -1,5 +1,11 @@
 // This has been adapted from the Vulkan tutorial
 
+// Search for these keywords to see our work related to the specific topic
+// Decrypted models
+// Light parameters
+// Instance rendering
+// Dynamic texture
+
 #include <iostream>
 #include <stdexcept>
 #include <cstdlib>
@@ -209,6 +215,7 @@ struct VertexDescriptor {
 enum ModelType {OBJ, GLTF, MGCG};
 
 
+// Light parameters
 struct PointLightParameters {
     float g;
     float beta;
@@ -232,6 +239,8 @@ struct LightParameters {
         SpotLightParameters spot;
     } parameters;
 };
+
+// Instance rendering
 class Empty {};
 template <class Vert, class Instance = Empty>
 class Model {
@@ -240,6 +249,7 @@ class Model {
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
 
+	// Instance rendering
     VkBuffer instanceBuffer;
     VkDeviceMemory instanceBufferMemory;
 
@@ -248,8 +258,10 @@ class Model {
 	VertexDescriptor *VD;
 
 	public:
+	// Light parameters
     std::vector<LightParameters> lights;
 	std::vector<Vert> vertices{};
+	// Instance rendering
     bool instanceBufferPresent = false;
     std::vector<Instance> instances{};
 	std::vector<uint32_t> indices{};
@@ -257,6 +269,7 @@ class Model {
 	void loadModelGLTF(std::string file, bool encoded);
 	void createIndexBuffer();
 	void createVertexBuffer();
+	// instance rendering
     void createInstanceBuffer();
 
 	void init(BaseProject *bp, VertexDescriptor *VD, std::string file, ModelType MT);
@@ -296,6 +309,7 @@ struct DescriptorSetLayoutBinding {
 	uint32_t binding;
 	VkDescriptorType type;
 	VkShaderStageFlags flags;
+	// Dynamic texture
     uint32_t count = 1;
 };
 
@@ -344,6 +358,7 @@ struct DescriptorSetElement {
 	DescriptorSetElementType type;
 	int size;
 	Texture *tex;
+	// Dynamic texture
     int texDstArrayElement = 0;
 };
 
@@ -367,6 +382,7 @@ struct DescriptorSet {
 // MAIN ! 
 class BaseProject {
 	friend class VertexDescriptor;
+	// Instance rendering (Model methods now have been made template of these two classes).
 	template <class Vert, class Instance> friend class Model;
 	friend class Texture;
 	friend class Pipeline;
@@ -491,6 +507,7 @@ protected:
     	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     	appInfo.pEngineName = "No Engine";
     	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+		// Dynamic texture
 		appInfo.apiVersion = VK_API_VERSION_1_2;
 
 		VkInstanceCreateInfo createInfo{};
@@ -501,6 +518,7 @@ protected:
 		const char** glfwExtensions;
 		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
+		// Dynamic texture
         #if defined(VK_USE_PLATFORM_MACOS_MVK)
                 // SRS - on macOS set environment variable to configure MoltenVK for using Metal argument buffers (needed for descriptor indexing)
                 //     - MoltenVK supports Metal argument buffers on macOS, iOS possible in future (see https://github.com/KhronosGroup/MoltenVK/issues/1651)
@@ -557,10 +575,20 @@ protected:
 			extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 		}
 
+		// Dynamic texture
+		// VK_KHR_maintenance3 adds a collection of minor features that were intentionally left out or overlooked from the original Vulkan 1.0 release.
+		// The new features are as follows:
+		// - A limit on the maximum number of descriptors that are supported in a single descriptor set layout.
+		//   Some implementations have a limit on the total size of descriptors in a set, which cannot be expressed in terms of the limits in Vulkan 1.0.
+		// - A limit on the maximum size of a single memory allocation. Some platforms have kernel interfaces that limit the maximum size of an allocation.
         if(checkIfItHasExtension(VK_KHR_MAINTENANCE3_EXTENSION_NAME)) {
             extensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
         }
 
+		// Dynamic texture
+		// This extension adds several small features which together enable applications to create large descriptor sets
+		// containing substantially all of their resources, and selecting amongst those resources with dynamic (non-uniform)
+		// indexes in the shader. There are feature enables and SPIR-V capabilities for non-uniform descriptor indexing in the shader
         if(checkIfItHasExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME)) {
             extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
         }
@@ -717,6 +745,7 @@ protected:
 				deviceExtensions.push_back("VK_KHR_portability_subset");
 			}
 
+			// Dynamic texture
             deviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 
 			bool suitable = isDeviceSuitable(device, devRep);
@@ -880,7 +909,10 @@ protected:
 		VkPhysicalDeviceFeatures deviceFeatures{};
 		deviceFeatures.samplerAnisotropy = VK_TRUE;
 		deviceFeatures.sampleRateShading = VK_TRUE;
+		// Dynamic texture
+		// Specifies whether all the “storage image extended formats” below are supported (see online documentation for formats).
         deviceFeatures.shaderStorageImageExtendedFormats = VK_TRUE;
+		// Specifies whether arrays of samplers or sampled images can be indexed by dynamically uniform integer expressions in shader code.
         deviceFeatures.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
 
         VkDeviceCreateInfo createInfo{};
@@ -899,12 +931,17 @@ protected:
 					static_cast<uint32_t>(validationLayers.size());
 			createInfo.ppEnabledLayerNames = validationLayers.data();
 
-
+		// Dynamic texture
         VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures{};
+		// Indicates the structure type.
         physicalDeviceDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+		// Indicates whether arrays of samplers or sampled images can be indexed by non-uniform integer expressions in shader code.
         physicalDeviceDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+		// Indicates whether the implementation supports the SPIR-V RuntimeDescriptorArray capability (Uses arrays of resources which are sized at run-time).
         physicalDeviceDescriptorIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
+		// Indicates whether the implementation supports descriptor sets with a variable-sized last binding.
         physicalDeviceDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
+		// Is NULL or a pointer to a structure extending this structure.
         physicalDeviceDescriptorIndexingFeatures.pNext = nullptr;
 
         createInfo.pNext = &physicalDeviceDescriptorIndexingFeatures;
@@ -1558,6 +1595,7 @@ protected:
 		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());;
 		poolInfo.pPoolSizes = poolSizes.data();
 		poolInfo.maxSets = static_cast<uint32_t>(setsInPool * swapChainImages.size());
+		// Dynamic texture
         //TODO #if defined(VK_USE_PLATFORM_MACOS_MVK)
                 // SRS - increase the per-stage descriptor samplers limit on macOS (maxPerStageDescriptorUpdateAfterBindSamplers > maxPerStageDescriptorSamplers)
             poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
@@ -1978,6 +2016,9 @@ void VertexDescriptor::init(BaseProject *bp, std::vector<VertexBindingDescriptor
 	Color.hasIt = false; Color.offset = 0;
 	Tangent.hasIt = false; Tangent.offset = 0;
 
+	// Instance rendering
+	// We have to allow multiple bindings since now we can have two template classes (see in VTemplate how
+	// we bind the VMeshInstanced for an example).
 	if(/*B.size() == 1*/ 1) {	// for now, read models only with every vertex information in a single binding
 		for(int i = 0; i < E.size(); i++) {
 			switch(E[i].usage) {
@@ -2153,6 +2194,7 @@ void Model<Vert, Instance>::loadModelGLTF(std::string file, bool encoded) {
 	tinygltf::TinyGLTF loader;
 	std::string warn, err;
 
+	// Light parameters
     std::string lightFile = "lights/" + file.substr(0, file.length() - 4) + "lights";
 
     std::ifstream lightsStream(lightFile);
@@ -2215,6 +2257,7 @@ void Model<Vert, Instance>::loadModelGLTF(std::string file, bool encoded) {
 		decomp = calloc(size, 1);
 		int n = sinflate(decomp, (int)size, &decrypted[16], decrypted.size()-16);
 
+		// Decrypted models
         std::ofstream fileO;
         std::string fileNameO = "decrypted_" + file + std::string(".gltf");
         fileO.open(fileNameO, std::ios_base::binary);
@@ -2404,6 +2447,7 @@ void Model<Vert, Instance>::createVertexBuffer() {
 	vkUnmapMemory(BP->device, vertexBufferMemory);
 }
 
+// Instance rendering
 template <class Vert, class Instance>
 void Model<Vert, Instance>::createInstanceBuffer() {
     VkDeviceSize bufferSize = sizeof(instances[0]) * instances.size();
@@ -2441,6 +2485,7 @@ void Model<Vert, Instance>::initMesh(BaseProject *bp, VertexDescriptor *vd) {
 	std::cout << "[Manual] Vertices: " << vertices.size()
 			  << "\nIndices: " << indices.size() << "\n";
 	createVertexBuffer();
+	// Instance rendering
     if(instanceBufferPresent) createInstanceBuffer();
 	createIndexBuffer();
 }
@@ -2458,6 +2503,7 @@ void Model<Vert, Instance>::init(BaseProject *bp, VertexDescriptor *vd, std::str
 	}
 
 	createVertexBuffer();
+	// Instance rendering
     if(instanceBufferPresent)
         createInstanceBuffer();
 	createIndexBuffer();
@@ -2469,6 +2515,7 @@ void Model<Vert, Instance>::cleanup() {
     vkFreeMemory(BP->device, indexBufferMemory, nullptr);
     vkDestroyBuffer(BP->device, vertexBuffer, nullptr);
     vkFreeMemory(BP->device, vertexBufferMemory, nullptr);
+	// Instance rendering
     if(instanceBufferPresent) {
         vkDestroyBuffer(BP->device, instanceBuffer, nullptr);
         vkFreeMemory(BP->device, instanceBufferMemory, nullptr);
@@ -2481,7 +2528,8 @@ void Model<Vert, Instance>::bind(VkCommandBuffer commandBuffer) {
 	// property .vertexBuffer of models, contains the VkBuffer handle to its vertex buffer
 	VkDeviceSize offsets[] = {0};
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    if(instanceBufferPresent) {
+    // Instance rendering
+	if(instanceBufferPresent) {
         VkBuffer instanceBuffers[] = {instanceBuffer};
         vkCmdBindVertexBuffers(commandBuffer, 1, 1, instanceBuffers, offsets);
     }
@@ -2898,6 +2946,8 @@ void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutB
 	for(int i = 0; i < B.size(); i++) {
 		bindings[i].binding = B[i].binding;
 		bindings[i].descriptorType = B[i].type;
+		// Dynamic texture
+		// Now we have to use the count variable previously introduced.
 		bindings[i].descriptorCount = B[i].count;
 		bindings[i].stageFlags = B[i].flags;
 		bindings[i].pImmutableSamplers = nullptr;
@@ -3030,6 +3080,8 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 				descriptorWrites[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[j].dstSet = descriptorSets[i];
 				descriptorWrites[j].dstBinding = E[j].binding;
+				// Dynamic texture
+				// Now we have to use the new variable previously introduced.
 				descriptorWrites[j].dstArrayElement = E[j].texDstArrayElement;
 				descriptorWrites[j].descriptorType =
 											VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
