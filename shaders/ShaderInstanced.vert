@@ -17,7 +17,7 @@ layout(location = 1) in vec3 inNorm;
 layout(location = 2) in vec2 inUV;
 layout(location = 3) in float instanceRot;
 layout(location = 4) in vec3 shift;
-layout(location = 5) in float instanceType;
+layout(location = 5) in int instanceType;
 
 layout(location = 0) out vec3 fragPos;
 layout(location = 1) out vec3 fragNorm;

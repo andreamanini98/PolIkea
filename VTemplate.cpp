@@ -58,7 +58,7 @@ enum Direction {
 struct ModelInstance {
     float baseRot;
     glm::vec3 pos;
-    float instanceType; // 0 == doors, 1 == lights (used in the shader)
+    int instanceType; // 0 == doors, 1 == lights (used in the shader)
 };
 
 struct OpenableDoor {
@@ -66,7 +66,6 @@ struct OpenableDoor {
     float baseRot;
     float doorRot;
     float doorSpeed;
-    float doorRange;
     DoorState doorState;
     float time;
     DoorOpeningDirection doorOpeningDirection;
@@ -330,7 +329,6 @@ public:
                                                   doorDirection == NORTH ? WALL_WIDTH / 2 : 0.0f),
                             rotType,
                             0.0f,
-                            glm::radians(90.0f),
                             glm::radians(90.0f),
                             CLOSED,
                             0.0f,
@@ -613,10 +611,11 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
 
 
 inline void
-insertRectVertices(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 norm, std::vector<Vertex> *vPos,
-                   float aspect_ratio) {
+insertRectVertices(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, std::vector<Vertex> *vPos,
+                   float aspect_ratio, float vecDir) {
     float repeat_x = glm::abs(glm::distance(v0, v1)) / (8.0f);
     float repeat_y = glm::abs(glm::distance(v2, v1)) / (8.0f * aspect_ratio);
+    glm::vec3 norm = glm::normalize(glm::cross(v1 - v0, v3 - v0) * vecDir);
 
     vPos->push_back({v0, norm, {0.0f, repeat_y}});
     vPos->push_back({v1, norm, {repeat_x, repeat_y}});
@@ -636,7 +635,7 @@ inline void initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector
     glm::vec3 bottomRight = polikeaPos + glm::vec3(sideOffset, 0.0f, frontOffset);
     glm::vec3 h = glm::vec3(0.0f, 15.0f, 0.0f);
 
-    insertRectVertices(bottomLeft, topLeft, topRight, bottomRight, {0.0f, 1.0f, 0.0f}, vPosGround, 1.0f);
+    insertRectVertices(bottomLeft, topLeft, topRight, bottomRight, vPosGround, 1.0f, -1.0f);
     vIdxGround->push_back(0);
     vIdxGround->push_back(1);
     vIdxGround->push_back(2);
@@ -644,14 +643,10 @@ inline void initPolikeaSurroundings(std::vector<Vertex> *vPosGround, std::vector
     vIdxGround->push_back(2);
     vIdxGround->push_back(3);
 
-    // TODO CHECK THESE NORMALS
-    insertRectVertices(bottomLeft, topLeft, topLeft + h, bottomLeft + h, {1.0f, 0.0f, 0.0f}, vPosFence,
-                       FENCE_ASPECT_RATIO);
-    insertRectVertices(topLeft, topRight, topRight + h, topLeft + h, {0.0f, 0.0f, 1.0f}, vPosFence, FENCE_ASPECT_RATIO);
-    insertRectVertices(topRight, bottomRight, bottomRight + h, topRight + h, {-1.0f, 0.0f, 0.0f}, vPosFence,
-                       FENCE_ASPECT_RATIO);
-    insertRectVertices(bottomRight, bottomLeft, bottomLeft + h, bottomRight + h, {0.0f, 0.0f, -1.0f}, vPosFence,
-                       FENCE_ASPECT_RATIO);
+    insertRectVertices(bottomLeft, topLeft, topLeft + h, bottomLeft + h, vPosFence, FENCE_ASPECT_RATIO, 1.0f);
+    insertRectVertices(topLeft, topRight, topRight + h, topLeft + h, vPosFence, FENCE_ASPECT_RATIO, 1.0f);
+    insertRectVertices(topRight, bottomRight, bottomRight + h, topRight + h, vPosFence, FENCE_ASPECT_RATIO, 1.0f);
+    insertRectVertices(bottomRight, bottomLeft, bottomLeft + h, bottomRight + h, vPosFence, FENCE_ASPECT_RATIO, 1.0f);
 
     for (int i = 0; i < 4; i++) {
         vIdxFence->push_back(i * 4 + 0);
@@ -926,8 +921,8 @@ protected:
                                                                                 baseRot),      sizeof(float),     OTHER},
                                     {1, 4, VK_FORMAT_R32G32B32_SFLOAT, offsetof(ModelInstance,
                                                                                 pos),          sizeof(glm::vec3), OTHER},
-                                    {1, 5, VK_FORMAT_R32_SFLOAT,       offsetof(ModelInstance,
-                                                                                instanceType), sizeof(float),     OTHER}
+                                    {1, 5, VK_FORMAT_R32_SINT,         offsetof(ModelInstance,
+                                                                                instanceType), sizeof(int),       OTHER}
                             });
 
         // Pipelines [Shader couples]
@@ -991,7 +986,6 @@ protected:
                         glm::radians(0.0f),
                         0.0f,
                         glm::radians(90.0f),
-                        glm::radians(90.0f),
                         CLOSED,
                         0.0f,
                         COUNTERCLOCKWISE
@@ -1001,7 +995,6 @@ protected:
                         getPolikeaBuildingPosition() + glm::vec3(5.0947, 0.25, -DOOR_HWIDTH / 2),
                         glm::radians(180.0f),
                         0.0f,
-                        glm::radians(90.0f),
                         glm::radians(90.0f),
                         CLOSED,
                         0.0f,
