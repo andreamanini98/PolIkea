@@ -133,14 +133,6 @@ struct UniformBlockDoors {
     alignas(16) glm::vec4 door[N_ROOMS - 1 + 2]; // We have 2 more doors for polikea
 };
 
-struct UniformBlockPositionedLights {
-    alignas(4) float amb;
-    alignas(4) float gamma;
-    alignas(16) glm::vec3 sColor;
-    alignas(16) glm::mat4 prjViewMat;
-    alignas(16) glm::vec4 lights[N_POS_LIGHTS];
-};
-
 struct GlobalUniformBlock {
     alignas(16) glm::vec3 DlightDir;
     alignas(16) glm::vec3 DlightColor;
@@ -729,7 +721,7 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLPositionedLights, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLHouseBindings;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLHouseBindings;
 
     // Vertex formats
     VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced;
@@ -776,9 +768,8 @@ protected:
     std::vector<BoundingRectangle> roomOccupiedArea;
 
     Model<Vertex, ModelInstance> MDoor, MPositionedLights;
-    DescriptorSet DSDoor, DSPositionedLights;
+    DescriptorSet DSDoor;
     UniformBlockDoors uboDoor;
-    UniformBlockPositionedLights uboPositionedLights;
 
     std::vector<OpenableDoor> doors;
 
@@ -838,9 +829,6 @@ protected:
         DSLDoor.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
-        });
-        DSLPositionedLights.init(this, {
-                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
         DSLGubo.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
@@ -963,7 +951,7 @@ protected:
         //PVertexWithColors.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderVertInstanced.spv", "shaders/ShaderFraInstanced.spv",
-                            {&DSLGubo, &DSLHouseBindings, &DSLDoor, &DSLPositionedLights});
+                            {&DSLGubo, &DSLHouseBindings, &DSLDoor});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         // Models, textures and Descriptors (values assigned to the uniforms)
@@ -1139,9 +1127,6 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
                 {1, TEXTURE, 0,                         &TFurniture}
         });
-        DSPositionedLights.init(this, &DSLPositionedLights, {
-                {0, UNIFORM, sizeof(UniformBlockPositionedLights), nullptr}
-        });
         DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
                 {1, TEXTURE, 0,                    &TPlankWall,   0},
@@ -1176,7 +1161,6 @@ protected:
         DSOverlayMoveObject.cleanup();
         DSPolikeaBuilding.cleanup();
         DSDoor.cleanup();
-        DSPositionedLights.cleanup();
         DSBuilding.cleanup();
         DSHouseBindings.cleanup();
 
@@ -1218,7 +1202,6 @@ protected:
         DSLOverlay.cleanup();
         DSLVertexWithColors.cleanup();
         DSLDoor.cleanup();
-        DSLPositionedLights.cleanup();
         DSLHouseBindings.cleanup();
 
         // Destroys the pipelines
@@ -1304,7 +1287,6 @@ protected:
         DSGubo.bind(commandBuffer, PMeshInstanced, 0, currentImage);
         DSHouseBindings.bind(commandBuffer, PMeshInstanced, 1, currentImage);
         DSDoor.bind(commandBuffer, PMeshInstanced, 2, currentImage);
-        DSPositionedLights.bind(commandBuffer, PMeshInstanced, 3, currentImage);
 
         MDoor.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1 + 2, 0, 0, 0);
@@ -1637,14 +1619,6 @@ protected:
         for (int i = 0; i < N_ROOMS - 1 + 2; i++)
             uboDoor.door[i] = glm::vec4(doors[i].doorRot);
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
-
-        uboPositionedLights.amb = 0.05f;
-        uboPositionedLights.gamma = 180.0f;
-        uboPositionedLights.sColor = glm::vec3(1.0f);
-        uboPositionedLights.prjViewMat = ViewPrj;
-        for (auto &light: uboPositionedLights.lights)
-            light = glm::vec4(0.0f);
-        DSPositionedLights.map(currentImage, &uboPositionedLights, sizeof(uboPositionedLights), 0);
 
         for (auto &mInfo: MV) {
             glm::mat4 World =

@@ -12,14 +12,6 @@ layout(std140, set = 2, binding = 0) uniform UniformBufferObject {
     vec4 door[N_ROOMS-1];
 } ubo;
 
-layout(std140, set = 3, binding = 0) uniform UniformBlockPositionedLights {
-	float amb;
-	float gamma;
-	vec3 sColor;
-	mat4 prjViewMat;
-	vec4 lights[N_POS_LIGHTS];
-} uboPos;
-
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNorm;
 layout(location = 2) in vec2 inUV;
@@ -56,8 +48,6 @@ void main() {
 	float x = 0.0f;
 	if (instanceType == 0) {
 		x = ubo.door[gl_InstanceIndex].x;
-	} else if (instanceType == 1) {
-		x = uboPos.lights[gl_InstanceIndex].x;
 	}
 	mat4 rotation = rotationMatrix(vec3(0.0, 1.0, 0.0), instanceRot + x);
 	vec3 rotatedPosition = (rotation * vec4(inPosition, 1.0)).xyz;
