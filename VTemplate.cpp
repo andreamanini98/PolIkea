@@ -181,7 +181,6 @@ struct VertexVColor {
     glm::vec3 color;
 };
 
-
 // ----- HOME GENERATION ----- //
 
 #define WALL_TEXTURES_PER_PIXEL (1.0f/4.0)
@@ -709,7 +708,6 @@ struct ModelInfo {
 
 
 // ----- MAIN ----- //
-
 class VTemplate : public BaseProject {
 protected:
 
@@ -746,7 +744,7 @@ protected:
     // Other application parameters
     // A vector containing one element for each model loaded where we want to keep track of its information
     std::vector<ModelInfo> MV;
-    std::vector<ModelInfo> MVCharacter;
+    ModelInfo MVCharacter;
 
     glm::vec3 polikeaBuildingPosition = getPolikeaBuildingPosition();
     std::vector<glm::vec3> polikeaBuildingOffsets = getPolikeaBuildingOffsets();
@@ -760,7 +758,11 @@ protected:
     float CamRho = 0.0f;
     bool OnlyMoveCam = true;
     uint32_t MoveObjIndex = 0;
-    bool isLookAt = false;
+
+    bool teleportCharacter = false;         // Used to set the character position when pressing teleporting keys (K, H).
+    glm::vec3 teleportDestination = CamPos; // The teleport destination (here CamPos is just an initialization).
+    bool adjustCharacter = true;            // Boolean that is true when we move teleport the camera in first person).
+    bool isLookAt = true;                   // Tells if we use the look at technique or not.
 
     std::vector<glm::vec3> roomCenters;
     std::vector<BoundingRectangle> roomOccupiedArea;
@@ -955,7 +957,7 @@ protected:
 
         loadModels("models/furniture", this, &VMesh, &MV, MGCG);
         loadModels("models/lights", this, &VMesh, &MV, MGCG);
-        loadModels("models/character", this, &VMesh, &MVCharacter, OBJ);
+        MVCharacter = loadCharacter("models/character", this, &VMesh, OBJ);
 
         // Creates a mesh with direct enumeration of vertices and indices
         initPolikeaSurroundings(&MPolikeaExternFloor.vertices,
@@ -1030,6 +1032,39 @@ protected:
         TCharacter.init(this, "textures/character.png");
     }
 
+    inline ModelInfo
+    loadCharacter(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef, ModelType modelType) {
+        ModelInfo MIChar;
+        for (const auto &entry: fs::directory_iterator(path)) {
+            // Added this check since in MacOS this hidden file could be created in a directory
+            if (static_cast<std::string>(entry.path()).find("DS_Store") != std::string::npos)
+                continue;
+
+            MIChar.model.init(thisVTemplate, VMeshRef, entry.path(), modelType);
+            // This position is the initial position of the character.
+            MIChar.modelPos = CamPos - glm::vec3(0.0f, CamPos.y, 0.0f);
+            // We adjust the model's initial rotation.
+            MIChar.modelRot = glm::radians(-90.0f);
+
+            MIChar.minCoords = glm::vec3(std::numeric_limits<float>::max());
+            MIChar.maxCoords = glm::vec3(std::numeric_limits<float>::lowest());
+
+            for (const auto &vertex: MIChar.model.vertices) {
+                MIChar.minCoords = glm::min(MIChar.minCoords, vertex.pos);
+                MIChar.maxCoords = glm::max(MIChar.maxCoords, vertex.pos);
+            }
+            MIChar.center = (MIChar.minCoords + MIChar.maxCoords) / 2.0f;
+            MIChar.size = MIChar.maxCoords - MIChar.minCoords;
+
+            MIChar.cylinderRadius = glm::distance(glm::vec3(MIChar.maxCoords.x, 0, MIChar.maxCoords.z),
+                                                  glm::vec3(MIChar.minCoords.x, 0, MIChar.minCoords.z)) / 2;
+            MIChar.cylinderHeight = MIChar.maxCoords.y - MIChar.minCoords.y;
+
+            MIChar.modelPos += glm::vec3(0.0, -std::min(0.0f, MIChar.minCoords.y), 0.0);
+        }
+        return MIChar;
+    }
+
     inline void
     loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef,
                std::vector<ModelInfo> *MVRef, ModelType modelType) {
@@ -1053,7 +1088,7 @@ protected:
                 MI.modelPos = polikeaBuildingPosition + polikeaBuildingOffsets[polikeaBuildingOffsetsIndex];
                 polikeaBuildingOffsetsIndex++;
             } else {
-                MI.modelPos = CamPos - glm::vec3(0.0f, CamPos.y, 0.0f);
+                MI.modelPos = CamPos - glm::vec3(0.0f + posOffset * 2.0f, CamPos.y, 0.0f);
             }
             MI.modelRot = (MAX_OBJECTS_IN_POLIKEA - polikeaBuildingOffsetsIndex < 3) ? glm::radians(180.0f) : 0.0f;
 
@@ -1136,7 +1171,7 @@ protected:
             });
         }
 
-        MVCharacter[0].dsModel.init(this, &DSLMesh, {
+        MVCharacter.dsModel.init(this, &DSLMesh, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
                 {1, TEXTURE, 0,                    &TCharacter}
         });
@@ -1164,7 +1199,7 @@ protected:
 
         for (auto &mInfo: MV)
             mInfo.dsModel.cleanup();
-        MVCharacter[0].dsModel.cleanup();
+        MVCharacter.dsModel.cleanup();
     }
 
     // Here you destroy all the Models, Texture and Desc. Set Layouts you created!
@@ -1194,7 +1229,7 @@ protected:
         MBuilding.cleanup();
         for (auto &mInfo: MV)
             mInfo.model.cleanup();
-        MVCharacter[0].model.cleanup();
+        MVCharacter.model.cleanup();
 
         // Cleanup descriptor set layouts
         DSLMesh.cleanup();
@@ -1270,9 +1305,9 @@ protected:
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
 
-        MVCharacter[0].dsModel.bind(commandBuffer, PMesh, 2, currentImage);
-        MVCharacter[0].model.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MVCharacter[0].model.indices.size()), 1, 0, 0, 0);
+        MVCharacter.dsModel.bind(commandBuffer, PMesh, 2, currentImage);
+        MVCharacter.model.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MVCharacter.model.indices.size()), 1, 0, 0, 0);
 
         // --- PIPELINE OVERLAY ---
         POverlay.bind(commandBuffer);
@@ -1296,7 +1331,8 @@ protected:
         MDoor.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1 + 2, 0, 0, 0);
         MPositionedLights.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0,
+                         0);
     }
 
     // Here is where you update the uniforms.
@@ -1311,18 +1347,19 @@ protected:
         const float ROT_SPEED = glm::radians(120.0f);
         const float MOVE_SPEED = 4.0f;
 
-        static bool debounce, lightDebounce, roomCyclingDebounce, isLookAtDebounce = false;
-        static int curDebounce, curLightDebounce, curRoomCyclingDebounce, curIsLookAtDebounce = 0;
+        static bool debounce, lightDebounce, roomCyclingDebounce, isLookAtDebounce, kDebounce, hDebounce = false;
+        static int curDebounce, curLightDebounce, curRoomCyclingDebounce, curIsLookAtDebounce, curKDebounce, curHDebounce = 0;
 
         float deltaT;
         auto m = glm::vec3(0.0f), r = glm::vec3(0.0f);
-        bool fire, lightSwitch, cycleRoom, isLookAtFire = false;
-        getSixAxis(deltaT, m, r, fire, lightSwitch, cycleRoom, isLookAtFire);
+        bool fire, lightSwitch, cycleRoom, isLookAtFire, isKPressed, isHPressed = false;
+        getSixAxis(deltaT, m, r, fire, lightSwitch, cycleRoom, isLookAtFire, isKPressed, isHPressed);
 
+        const float minPitch = glm::radians(-8.75f);
+        const float maxPitch = glm::radians(60.0f);
         CamAlpha = CamAlpha - ROT_SPEED * deltaT * r.y;
         CamBeta = CamBeta - ROT_SPEED * deltaT * r.x;
-        CamBeta = CamBeta < glm::radians(-90.0f) ? glm::radians(-90.0f) :
-                  (CamBeta > glm::radians(90.0f) ? glm::radians(90.0f) : CamBeta);
+        CamBeta = CamBeta < minPitch ? minPitch : (CamBeta > maxPitch ? maxPitch : CamBeta);
         CamRho = CamRho - ROT_SPEED * deltaT * r.z;
         CamRho = CamRho < glm::radians(-180.0f) ? glm::radians(-180.0f) :
                  (CamRho > glm::radians(180.0f) ? glm::radians(180.0f) : CamRho);
@@ -1346,18 +1383,20 @@ protected:
         if (isLookAtFire) {
             if (!isLookAtDebounce) {
                 isLookAtDebounce = true;
-                curIsLookAtDebounce = GLFW_KEY_C;
-                //if (isLookAt)
-                //    CamPos = roomCenters[0] + glm::vec3(0.0f, 1.0f, 3.0f);
-                isLookAt = !isLookAt;
+                curIsLookAtDebounce = GLFW_KEY_Z;
+                // If isLookAt is false that means that we're going to see the character and that a potential teleport without the character
+                // may have occurred. Thus, we need to adjust the character's position.
+                if (!isLookAt)
+                    adjustCharacter = true;
+                isLookAt = !isLookAt; // Flip this boolean to change lookAt mode.
             }
-        } else if ((curIsLookAtDebounce == GLFW_KEY_C) && isLookAtDebounce) {
+        } else if ((curIsLookAtDebounce == GLFW_KEY_Z) && isLookAtDebounce) {
             isLookAtDebounce = false;
             curIsLookAtDebounce = 0;
         }
 
         if (!OnlyMoveCam) {
-            isLookAt = false;
+            isLookAt = false; // When we move objects we don't want to see also the character.
             //Checks to see if an object can be bought
             if (!MV[MoveObjIndex].hasBeenBought) {
                 bool isObjectAllowedToMove = true;
@@ -1394,7 +1433,8 @@ protected:
                             if (MV[MoveObjIndex].roomCycling >= N_ROOMS)
                                 MV[MoveObjIndex].roomCycling = 0;
                             CamPos = roomCenters[MV[MoveObjIndex].roomCycling] + glm::vec3(0.0f, 1.0f, 0.0f);
-                            MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(CamPos, CamAlpha, CamBeta, modelPos);
+                            MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(CamPos, CamAlpha, CamBeta,
+                                                                                 modelPos);
                         }
                     }
                 } else if ((curRoomCyclingDebounce == GLFW_KEY_0) && roomCyclingDebounce) {
@@ -1502,15 +1542,35 @@ protected:
             curDebounce = 0;
         }
 
-        if (glfwGetKey(window, GLFW_KEY_H)) {
-            CamPos = roomCenters[0] + glm::vec3(0.0f, 1.0f, 3.0f);
-            MVCharacter[0].modelPos = CamPos;
-            CamAlpha = CamBeta = CamRho = 0.0f;
+        if (isKPressed) {
+            if (!kDebounce) {
+                kDebounce = true;
+                curKDebounce = GLFW_KEY_K;
+                CamPos = polikeaBuildingPosition + glm::vec3(5.0f, 1.0f, 5.0f);
+                CamAlpha = CamBeta = CamRho = 0.0f;
+                // We have to teleport the character.
+                teleportCharacter = true;
+                teleportDestination = polikeaBuildingPosition + glm::vec3(5.0f, 0.0f, 5.0f);
+            }
+        } else if ((curKDebounce == GLFW_KEY_K) && kDebounce) {
+            kDebounce = false;
+            curKDebounce = 0;
+            teleportCharacter = false; // This ensure that at the next update the teleportation is off.
         }
-        if (glfwGetKey(window, GLFW_KEY_K)) {
-            CamPos = polikeaBuildingPosition + glm::vec3(5.0f, 1.0f, 5.0f);
-            MVCharacter[0].modelPos = CamPos;
-            CamAlpha = CamBeta = CamRho = 0.0f;
+        if (isHPressed) {
+            if (!hDebounce) {
+                hDebounce = true;
+                curHDebounce = GLFW_KEY_H;
+                CamPos = roomCenters[0] + glm::vec3(0.0f, 1.0f, 3.0f);
+                CamAlpha = CamBeta = CamRho = 0.0f;
+                // We have to teleport the character.
+                teleportCharacter = true;
+                teleportDestination = roomCenters[0] + glm::vec3(0.0f, 0.0f, 3.0f);
+            }
+        } else if ((curHDebounce == GLFW_KEY_H) && hDebounce) {
+            hDebounce = false;
+            curHDebounce = 0;
+            teleportCharacter = false; // This ensure that at the next update the teleportation is off.
         }
 
         gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
@@ -1561,11 +1621,23 @@ protected:
         gubo.nPointLights = indexPoint;
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
-        glm::mat4 World;
-        glm::mat4 ViewPrj;
+        glm::mat4 World, WorldCharacter, ViewPrj;
         if (isLookAt) {
-            GameLogic(Ar, ViewPrj, World, m, r, deltaT);
+            // Here we build the lookAt matrix
+            // First we have to determine if the character must teleport or not (either from a normal teleportation or just for adjustment).
+            bool activateTeleport = adjustCharacter || teleportCharacter;
+            // Then we determine the teleport location (the first case is for adjustment,
+            // the second for actual teleportation when pressing K or H while seeing the character).
+            glm::vec3 teleport = adjustCharacter ? CamPos - glm::vec3(0.0f, CamPos.y, 0.0f) : teleportDestination;
+
+            // Next we call the GameLogic() function to compute the lookAt matrices
+            getLookAt(Ar, ViewPrj, WorldCharacter,
+                      {m, deltaT, -CamAlpha, CamBeta, CamRho, ux, uz, MVCharacter.modelRot, MVCharacter.modelPos},
+                      activateTeleport, teleport, boundingRectangles);
+            // At the end put this to false since the adjustment has occurred (if it was needed).
+            adjustCharacter = false;
         } else {
+            // Otherwise we normally build our View-Projection matrix.
             ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         }
 
@@ -1648,25 +1720,24 @@ protected:
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
 
         for (auto &mInfo: MV) {
-            glm::mat4 World2 =
-                    MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * glm::mat4(1.0f);;
+            World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * glm::mat4(1.0f);;
             mInfo.modelUBO.amb = 0.05f;
             mInfo.modelUBO.gamma = 180.0f;
             mInfo.modelUBO.sColor = glm::vec3(1.0f);
-            mInfo.modelUBO.worldMat = World2;
-            mInfo.modelUBO.nMat = glm::inverse(World2);
-            mInfo.modelUBO.mvpMat = ViewPrj * World2;
+            mInfo.modelUBO.worldMat = World;
+            mInfo.modelUBO.nMat = glm::inverse(mInfo.modelUBO.worldMat);
+            mInfo.modelUBO.mvpMat = ViewPrj * mInfo.modelUBO.worldMat;
             mInfo.dsModel.map(currentImage, &mInfo.modelUBO, sizeof(mInfo.modelUBO), 0);
         }
 
-        MVCharacter[0].modelUBO.amb = 0.05f;
-        MVCharacter[0].modelUBO.gamma = 180.0f;
-        MVCharacter[0].modelUBO.sColor = glm::vec3(1.0f);
-        MVCharacter[0].modelUBO.worldMat =
-                World * glm::scale(glm::mat4(1), (isLookAt) ? glm::vec3(2.0f) : glm::vec3(0.0f));
-        MVCharacter[0].modelUBO.nMat = glm::inverse(MVCharacter[0].modelUBO.worldMat);
-        MVCharacter[0].modelUBO.mvpMat = ViewPrj * MVCharacter[0].modelUBO.worldMat;
-        MVCharacter[0].dsModel.map(currentImage, &MVCharacter[0].modelUBO, sizeof(MVCharacter[0].modelUBO), 0);
+        MVCharacter.modelUBO.amb = 0.05f;
+        MVCharacter.modelUBO.gamma = 180.0f;
+        MVCharacter.modelUBO.sColor = glm::vec3(1.0f);
+        MVCharacter.modelUBO.worldMat =
+                WorldCharacter * glm::scale(glm::mat4(1), (isLookAt) ? glm::vec3(2.0f) : glm::vec3(0.0f));
+        MVCharacter.modelUBO.nMat = glm::inverse(MVCharacter.modelUBO.worldMat);
+        MVCharacter.modelUBO.mvpMat = ViewPrj * MVCharacter.modelUBO.worldMat;
+        MVCharacter.dsModel.map(currentImage, &MVCharacter.modelUBO, sizeof(MVCharacter.modelUBO), 0);
     }
 };
 
