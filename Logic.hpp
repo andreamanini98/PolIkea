@@ -83,6 +83,8 @@ getLookAt(float Ar, glm::mat4 &ViewPrj, glm::mat4 &World, LookAtStuff lookAtStuf
 
     static glm::vec3 PosOld = CharacterPos;
     glm::vec3 P = PosOld * std::exp(-10 * lookAtStuff.deltaT) + CharacterPos * (1 - std::exp(-10 * lookAtStuff.deltaT));
+    // Use the one commented below if you want immediate teleportation
+    //glm::vec3 P = (teleport ? glm::vec3(0) : PosOld * std::exp(-10 * lookAtStuff.deltaT)) + CharacterPos * (teleport ? 1 : (1 - std::exp(-10 * lookAtStuff.deltaT)));
     PosOld = P;
 
     //calculate look at matrix ( same as glm::lookAt )
