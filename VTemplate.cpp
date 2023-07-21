@@ -4,6 +4,7 @@
 #include "Starter.hpp"
 #include "WorldView.hpp"
 #include "Parameters.hpp"
+#include "Logic.hpp"
 #include <random>
 #include <unordered_set>
 
@@ -735,7 +736,7 @@ protected:
     // Descriptor sets
     DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveObject, DSPolikeaBuilding, DSBuilding, DSHouseBindings;
     // Textures
-    Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones, TOverlayBuyObject;
+    Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones, TOverlayBuyObject, TCharacter;
     // C++ storage for uniform variables
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
@@ -745,6 +746,7 @@ protected:
     // Other application parameters
     // A vector containing one element for each model loaded where we want to keep track of its information
     std::vector<ModelInfo> MV;
+    std::vector<ModelInfo> MVCharacter;
 
     glm::vec3 polikeaBuildingPosition = getPolikeaBuildingPosition();
     std::vector<glm::vec3> polikeaBuildingOffsets = getPolikeaBuildingOffsets();
@@ -758,6 +760,7 @@ protected:
     float CamRho = 0.0f;
     bool OnlyMoveCam = true;
     uint32_t MoveObjIndex = 0;
+    bool isLookAt = false;
 
     std::vector<glm::vec3> roomCenters;
     std::vector<BoundingRectangle> roomOccupiedArea;
@@ -950,8 +953,9 @@ protected:
 
         // Models, textures and Descriptors (values assigned to the uniforms)
 
-        loadModels("models/furniture", this, &VMesh, &MV);
-        loadModels("models/lights", this, &VMesh, &MV);
+        loadModels("models/furniture", this, &VMesh, &MV, MGCG);
+        loadModels("models/lights", this, &VMesh, &MV, MGCG);
+        loadModels("models/character", this, &VMesh, &MVCharacter, OBJ);
 
         // Creates a mesh with direct enumeration of vertices and indices
         initPolikeaSurroundings(&MPolikeaExternFloor.vertices,
@@ -1023,10 +1027,12 @@ protected:
         TTiledStones.init(this, "textures/tiled_stones.jpg");
         TOverlayMoveObject.init(this, "textures/MoveBanner.png");
         TOverlayBuyObject.init(this, "textures/BuyObject.png");
+        TCharacter.init(this, "textures/character.png");
     }
 
     inline void
-    loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef, std::vector<ModelInfo> *MVRef) {
+    loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef,
+               std::vector<ModelInfo> *MVRef, ModelType modelType) {
         int posOffset = 0;
         static int polikeaBuildingOffsetsIndex = 0; // Used to count how many objects have been drawn inside polikea
 
@@ -1042,12 +1048,12 @@ protected:
             // The second parameter is the pointer to the vertex definition for this model
             // The third parameter is the file name
             // The last is a constant specifying the file type: currently only OBJ or GLTF
-            MI.model.init(thisVTemplate, VMeshRef, entry.path(), MGCG);
+            MI.model.init(thisVTemplate, VMeshRef, entry.path(), modelType);
             if (polikeaBuildingOffsetsIndex < MAX_OBJECTS_IN_POLIKEA) {
                 MI.modelPos = polikeaBuildingPosition + polikeaBuildingOffsets[polikeaBuildingOffsetsIndex];
                 polikeaBuildingOffsetsIndex++;
             } else {
-                MI.modelPos = glm::vec3(0.0f + posOffset * 2, 0.0f, 0.0f);
+                MI.modelPos = CamPos - glm::vec3(0.0f, CamPos.y, 0.0f);
             }
             MI.modelRot = (MAX_OBJECTS_IN_POLIKEA - polikeaBuildingOffsetsIndex < 3) ? glm::radians(180.0f) : 0.0f;
 
@@ -1129,6 +1135,11 @@ protected:
                     {1, TEXTURE, 0,                    &TFurniture}
             });
         }
+
+        MVCharacter[0].dsModel.init(this, &DSLMesh, {
+                {0, UNIFORM, sizeof(UniformBlock), nullptr},
+                {1, TEXTURE, 0,                    &TCharacter}
+        });
     }
 
     // Here you destroy your pipelines and Descriptor Sets!
@@ -1153,6 +1164,7 @@ protected:
 
         for (auto &mInfo: MV)
             mInfo.dsModel.cleanup();
+        MVCharacter[0].dsModel.cleanup();
     }
 
     // Here you destroy all the Models, Texture and Desc. Set Layouts you created!
@@ -1170,6 +1182,7 @@ protected:
         TTiledStones.cleanup();
         TDarkFloor.cleanup();
         TBathFloor.cleanup();
+        TCharacter.cleanup();
 
         // Cleanup models
         MPolikeaExternFloor.cleanup();
@@ -1181,6 +1194,7 @@ protected:
         MBuilding.cleanup();
         for (auto &mInfo: MV)
             mInfo.model.cleanup();
+        MVCharacter[0].model.cleanup();
 
         // Cleanup descriptor set layouts
         DSLMesh.cleanup();
@@ -1256,6 +1270,10 @@ protected:
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
 
+        MVCharacter[0].dsModel.bind(commandBuffer, PMesh, 2, currentImage);
+        MVCharacter[0].model.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MVCharacter[0].model.indices.size()), 1, 0, 0, 0);
+
         // --- PIPELINE OVERLAY ---
         POverlay.bind(commandBuffer);
         MOverlay.bind(commandBuffer);
@@ -1293,13 +1311,13 @@ protected:
         const float ROT_SPEED = glm::radians(120.0f);
         const float MOVE_SPEED = 4.0f;
 
-        static bool debounce, lightDebounce, roomCyclingDebounce = false;
-        static int curDebounce, curLightDebounce, curRoomCyclingDebounce = 0;
+        static bool debounce, lightDebounce, roomCyclingDebounce, isLookAtDebounce = false;
+        static int curDebounce, curLightDebounce, curRoomCyclingDebounce, curIsLookAtDebounce = 0;
 
         float deltaT;
         auto m = glm::vec3(0.0f), r = glm::vec3(0.0f);
-        bool fire, lightSwitch, cycleRoom = false;
-        getSixAxis(deltaT, m, r, fire, lightSwitch, cycleRoom);
+        bool fire, lightSwitch, cycleRoom, isLookAtFire = false;
+        getSixAxis(deltaT, m, r, fire, lightSwitch, cycleRoom, isLookAtFire);
 
         CamAlpha = CamAlpha - ROT_SPEED * deltaT * r.y;
         CamBeta = CamBeta - ROT_SPEED * deltaT * r.x;
@@ -1325,7 +1343,21 @@ protected:
             if (checkIfInBoundingRectangle(CamPos, boundingRectangle))
                 CamPos = oldCamPos;
 
+        if (isLookAtFire) {
+            if (!isLookAtDebounce) {
+                isLookAtDebounce = true;
+                curIsLookAtDebounce = GLFW_KEY_C;
+                //if (isLookAt)
+                //    CamPos = roomCenters[0] + glm::vec3(0.0f, 1.0f, 3.0f);
+                isLookAt = !isLookAt;
+            }
+        } else if ((curIsLookAtDebounce == GLFW_KEY_C) && isLookAtDebounce) {
+            isLookAtDebounce = false;
+            curIsLookAtDebounce = 0;
+        }
+
         if (!OnlyMoveCam) {
+            isLookAt = false;
             //Checks to see if an object can be bought
             if (!MV[MoveObjIndex].hasBeenBought) {
                 bool isObjectAllowedToMove = true;
@@ -1471,11 +1503,13 @@ protected:
         }
 
         if (glfwGetKey(window, GLFW_KEY_H)) {
-            CamPos = roomCenters[0] + glm::vec3(0.0f, 1.0, 3.0f);
+            CamPos = roomCenters[0] + glm::vec3(0.0f, 1.0f, 3.0f);
+            MVCharacter[0].modelPos = CamPos;
             CamAlpha = CamBeta = CamRho = 0.0f;
         }
         if (glfwGetKey(window, GLFW_KEY_K)) {
-            CamPos = polikeaBuildingPosition + glm::vec3(5.0f, 1.0, 5.0f);
+            CamPos = polikeaBuildingPosition + glm::vec3(5.0f, 1.0f, 5.0f);
+            MVCharacter[0].modelPos = CamPos;
             CamAlpha = CamBeta = CamRho = 0.0f;
         }
 
@@ -1527,7 +1561,13 @@ protected:
         gubo.nPointLights = indexPoint;
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
-        glm::mat4 ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
+        glm::mat4 World;
+        glm::mat4 ViewPrj;
+        if (isLookAt) {
+            GameLogic(Ar, ViewPrj, World, m, r, deltaT);
+        } else {
+            ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
+        }
 
         uboPolikea.amb = 0.05f;
         uboPolikea.gamma = 180.0f;
@@ -1608,16 +1648,25 @@ protected:
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
 
         for (auto &mInfo: MV) {
-            glm::mat4 World =
+            glm::mat4 World2 =
                     MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * glm::mat4(1.0f);;
             mInfo.modelUBO.amb = 0.05f;
             mInfo.modelUBO.gamma = 180.0f;
             mInfo.modelUBO.sColor = glm::vec3(1.0f);
-            mInfo.modelUBO.worldMat = World;
-            mInfo.modelUBO.nMat = glm::inverse(World);
-            mInfo.modelUBO.mvpMat = ViewPrj * World;
+            mInfo.modelUBO.worldMat = World2;
+            mInfo.modelUBO.nMat = glm::inverse(World2);
+            mInfo.modelUBO.mvpMat = ViewPrj * World2;
             mInfo.dsModel.map(currentImage, &mInfo.modelUBO, sizeof(mInfo.modelUBO), 0);
         }
+
+        MVCharacter[0].modelUBO.amb = 0.05f;
+        MVCharacter[0].modelUBO.gamma = 180.0f;
+        MVCharacter[0].modelUBO.sColor = glm::vec3(1.0f);
+        MVCharacter[0].modelUBO.worldMat =
+                World * glm::scale(glm::mat4(1), (isLookAt) ? glm::vec3(2.0f) : glm::vec3(0.0f));
+        MVCharacter[0].modelUBO.nMat = glm::inverse(MVCharacter[0].modelUBO.worldMat);
+        MVCharacter[0].modelUBO.mvpMat = ViewPrj * MVCharacter[0].modelUBO.worldMat;
+        MVCharacter[0].dsModel.map(currentImage, &MVCharacter[0].modelUBO, sizeof(MVCharacter[0].modelUBO), 0);
     }
 };
 

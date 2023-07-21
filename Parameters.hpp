@@ -33,7 +33,7 @@ std::vector<glm::vec3> getPolikeaBuildingOffsets() {
 }
 
 
-// Usd to get the positions where to put lights in polikea
+// Used to get the positions where to put lights in polikea
 std::vector<glm::vec3> getPolikeaPositionedLightsPos() {
     return {
             getPolikeaBuildingPosition() + glm::vec3(-4.75f, 7.5f, -5.5f),
