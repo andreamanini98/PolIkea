@@ -1636,7 +1636,7 @@ protected:
             if (checkIfInBoundingRectangle(MVCharacter.modelPos, boundingRectangle, 0.15f))
                 MVCharacter.modelPos = oldCharacterPos;
         // We check the bounding of the character for furniture
-        for (const auto & modelInfo : MV) {
+        for (const auto &modelInfo: MV) {
             if (MVCharacter.checkCollision(modelInfo)) {
                 MVCharacter.modelPos = oldCharacterPos;
                 break;
@@ -1662,6 +1662,10 @@ protected:
             // If we have to teleport we must update the character position accordingly
             if (activateTeleport) MVCharacter.modelPos = teleportTo;
 
+            // TODO THERE IS A PROBLEM WITH CAMERA AND CHARACTER, SINCE THE BOUNDING ARE NOT THE SAME
+            // I don't like this, but it works...
+            CamPos = MVCharacter.modelPos + glm::vec3(0.0, 1.0, 0.0);
+
             // Next we call the GameLogic() function to compute the lookAt matrices
             getLookAt(Ar, ViewPrj, WorldCharacter,
                       {deltaT, -CamAlpha, CamBeta, CamRho},
@@ -1672,6 +1676,14 @@ protected:
             // Otherwise we normally build our View-Projection matrix.
             ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         }
+
+        // TODO delete this
+        std::cout << "CAMPOSx:" << CamPos.x << std::endl;
+        std::cout << "CAMPOSy:" << CamPos.y << std::endl;
+        std::cout << "CAMPOSz:" << CamPos.z << std::endl;
+        std::cout << "MVCHARACTERx:" << MVCharacter.modelPos.x << std::endl;
+        std::cout << "MVCHARACTERy:" << MVCharacter.modelPos.y << std::endl;
+        std::cout << "MVCHARACTERz:" << MVCharacter.modelPos.z << std::endl;
 
         // ----- END CHARACTER MANIPULATION AND MATRIX GENERATION ----- //
 
@@ -1693,7 +1705,7 @@ protected:
         DSBuilding.map(currentImage, &uboBuilding, sizeof(uboBuilding), 0);
 
         bool displayKey = false;
-        for (auto & modelInfo : MV) {
+        for (auto &modelInfo: MV) {
             float distance = glm::distance(CamPos, modelInfo.modelPos);
             if (distance <= threshold) {
                 displayKey = true;
