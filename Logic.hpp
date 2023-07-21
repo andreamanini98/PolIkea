@@ -1,7 +1,7 @@
 #include <cmath>
 #include <iostream>
 
-#define CAM_HEIGHT 1.0
+#define CAM_HEIGHT 1.2
 
 // Struct containing the parameters to be passed from VTemplate.cpp
 struct LookAtStuff {
@@ -50,7 +50,7 @@ void getLookAt(float Ar, glm::mat4 &ViewPrj, glm::mat4 &World, float deltaT, glm
     //calculate look at matrix ( same as glm::lookAt )
     World = glm::translate(glm::mat4(1.0), characterPos) * glm::rotate(glm::mat4(1.0), characterAngle, glm::vec3(0, 1, 0));
 
-    glm::vec3 a = glm::vec3(World * glm::vec4(0, 0, 0, 1)) + glm::vec3(0, CAM_HEIGHT, 0);
+    glm::vec3 a = glm::vec3(World * glm::vec4(0, CAM_HEIGHT, 0, 1));
     glm::mat4 Mv = glm::lookAt(camPos, a, upVector); //lookAt matrix
 
     glm::mat4 perspectiveProjection = glm::perspective(glm::radians(60.0f), Ar, nearPlane, farPlane);

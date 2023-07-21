@@ -1342,10 +1342,11 @@ protected:
         bool fire, lightSwitch, cycleRoom, isLookAtFire, isKPressed, isHPressed = false;
         getSixAxis(deltaT, m, r, fire, lightSwitch, cycleRoom, isLookAtFire, isKPressed, isHPressed);
 
-        const float minPitch = glm::radians(-8.75f);
-        const float maxPitch = glm::radians(60.0f);
+        const float minPitch = glm::radians(-30.0f);
+        const float maxPitch = glm::radians(30.0f);
         cameraYaw = cameraYaw - ROT_SPEED * deltaT * r.y;
-        camPitch = camPitch - ROT_SPEED * deltaT * r.x;
+
+        camPitch = camPitch - ROT_SPEED * deltaT * r.x * (isLookAt ? -1.0f : 1.0f);
         camPitch = camPitch < minPitch ? minPitch : (camPitch > maxPitch ? maxPitch : camPitch);
         camRoll = camRoll - ROT_SPEED * deltaT * r.z;
         camRoll = camRoll < glm::radians(-180.0f) ? glm::radians(-180.0f) :
@@ -1377,6 +1378,7 @@ protected:
                 // If isLookAt is false that means that we're going to see the character and that a potential teleport without the character
                 // may have occurred. Thus, we need to adjust the character's position.
                 isLookAt = !isLookAt; // Flip this boolean to change lookAt mode.
+                characterYaw = cameraYaw;
             }
         } else if ((curIsLookAtDebounce == GLFW_KEY_Z) && isLookAtDebounce) {
             isLookAtDebounce = false;
@@ -1557,18 +1559,18 @@ protected:
         glm::mat4 World, WorldCharacter, ViewPrj;
         // We check the bounding of the character for surroundings
         for (const auto &boundingRectangle: boundingRectangles)
-            if (checkIfInBoundingRectangle(MVCharacter.modelPos, boundingRectangle, 0.15f))
-                MVCharacter.modelPos = oldCharacterPos;
+            if (checkIfInBoundingRectangle(characterPos, boundingRectangle, 0.15f))
+                characterPos = oldCharacterPos;
         // We check the bounding of the character for furniture
         for (const auto &modelInfo: MV) {
             if (MVCharacter.checkCollision(modelInfo)) {
-                MVCharacter.modelPos = oldCharacterPos;
+                characterPos = oldCharacterPos;
                 break;
             }
         }
 
         const float camHeight = CAM_HEIGHT;
-        const float camDist = 2.5;
+        const float camDist = 2.2f;
 
         // We update the rotation of the character
         float newAngle = characterYaw;
@@ -1586,7 +1588,7 @@ protected:
         if (isLookAt) {
             camPos = glm::translate(glm::mat4(1.0f), characterPos) *
                      glm::rotate(glm::mat4(1), cameraYaw, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                     glm::rotate(glm::mat4(1), -camPitch, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                     glm::rotate(glm::mat4(1), camPitch, glm::vec3(1.0f, 0.0f, 0.0f)) *
                      glm::vec4(0, camHeight, camDist, 1);
 
             // Next we call the GameLogic() function to compute the lookAt matrices
@@ -1740,7 +1742,7 @@ protected:
         MVCharacter.modelUBO.amb = 0.05f;
         MVCharacter.modelUBO.gamma = 180.0f;
         MVCharacter.modelUBO.sColor = glm::vec3(1.0f);
-        MVCharacter.modelUBO.worldMat = WorldCharacter * glm::scale(glm::mat4(1), (isLookAt) ? glm::vec3(2.0f) : glm::vec3(0.0f));
+        MVCharacter.modelUBO.worldMat = WorldCharacter * glm::scale(glm::mat4(1), (isLookAt) ? glm::vec3(1.5f, 1.8f, 1.5f) : glm::vec3(0.0f));
         MVCharacter.modelUBO.nMat = glm::inverse(MVCharacter.modelUBO.worldMat);
         MVCharacter.modelUBO.mvpMat = ViewPrj * MVCharacter.modelUBO.worldMat;
         MVCharacter.dsModel.map(currentImage, &MVCharacter.modelUBO, sizeof(MVCharacter.modelUBO), 0);
