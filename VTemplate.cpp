@@ -752,16 +752,13 @@ protected:
                                                                               SIDEOFFSET, BACKOFFSET);
     std::vector<glm::vec3> positionedLightPos = getPolikeaPositionedLightsPos();
 
-    glm::vec3 CamPos = glm::vec3(2.0, 1.0, 3.45706);
-    float CamAlpha = 0.0f;
-    float CamBeta = 0.0f;
-    float CamRho = 0.0f;
+    glm::vec3 newCharacterPos = glm::vec3(2.0, 0.0, 3.45706);
+    float characterYaw = 0.0f;
+    float cameraYaw = 0.0f;
+    float camPitch = 0.0f;
+    float camRoll = 0.0f;
     bool OnlyMoveCam = true;
     uint32_t MoveObjIndex = 0;
-
-    bool teleportCharacter = false;         // Used to set the character position when pressing teleporting keys (K, H).
-    glm::vec3 teleportDestination = CamPos; // The teleport destination (here CamPos is just an initialization).
-    bool adjustCharacter = true;            // Boolean that is true when we move teleport the camera in first person).
     bool isLookAt = false;                  // Tells if we use the look at technique or not.
 
     std::vector<glm::vec3> roomCenters;
@@ -957,7 +954,7 @@ protected:
 
         loadModels("models/furniture", this, &VMesh, &MV, MGCG);
         loadModels("models/lights", this, &VMesh, &MV, MGCG);
-        MVCharacter = loadCharacter("models/character", this, &VMesh, OBJ);
+        MVCharacter = loadCharacter("models/character/character.obj", this, &VMesh, OBJ);
 
         // Creates a mesh with direct enumeration of vertices and indices
         initPolikeaSurroundings(&MPolikeaExternFloor.vertices,
@@ -1032,41 +1029,30 @@ protected:
         TCharacter.init(this, "textures/character.png");
     }
 
-    inline ModelInfo
-    loadCharacter(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef, ModelType modelType) {
+    inline ModelInfo loadCharacter(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef, ModelType modelType) {
         ModelInfo MIChar;
-        for (const auto &entry: fs::directory_iterator(path)) {
-            // Added this check since in MacOS this hidden file could be created in a directory
-            if (static_cast<std::string>(entry.path()).find("DS_Store") != std::string::npos)
-                continue;
+        MIChar.model.init(thisVTemplate, VMeshRef, path, modelType);
+        MIChar.modelPos = newCharacterPos;
+        MIChar.modelRot = characterYaw;
 
-            MIChar.model.init(thisVTemplate, VMeshRef, entry.path(), modelType);
-            // This position is the initial position of the character.
-            MIChar.modelPos = CamPos - glm::vec3(0.0f, CamPos.y, 0.0f);
-            // We adjust the model's initial rotation.
-            MIChar.modelRot = glm::radians(-90.0f);
+        MIChar.minCoords = glm::vec3(std::numeric_limits<float>::max());
+        MIChar.maxCoords = glm::vec3(std::numeric_limits<float>::lowest());
 
-            MIChar.minCoords = glm::vec3(std::numeric_limits<float>::max());
-            MIChar.maxCoords = glm::vec3(std::numeric_limits<float>::lowest());
-
-            for (const auto &vertex: MIChar.model.vertices) {
-                MIChar.minCoords = glm::min(MIChar.minCoords, vertex.pos);
-                MIChar.maxCoords = glm::max(MIChar.maxCoords, vertex.pos);
-            }
-            MIChar.center = (MIChar.minCoords + MIChar.maxCoords) / 2.0f;
-            MIChar.size = MIChar.maxCoords - MIChar.minCoords;
-
-            MIChar.cylinderRadius = glm::distance(glm::vec3(MIChar.maxCoords.x, 0, MIChar.maxCoords.z),
-                                                  glm::vec3(MIChar.minCoords.x, 0, MIChar.minCoords.z)) / 2;
-            MIChar.cylinderHeight = MIChar.maxCoords.y - MIChar.minCoords.y;
-
-            MIChar.modelPos += glm::vec3(0.0, -std::min(0.0f, MIChar.minCoords.y), 0.0);
+        for (const auto &vertex: MIChar.model.vertices) {
+            MIChar.minCoords = glm::min(MIChar.minCoords, vertex.pos);
+            MIChar.maxCoords = glm::max(MIChar.maxCoords, vertex.pos);
         }
+        MIChar.center = (MIChar.minCoords + MIChar.maxCoords) / 2.0f;
+        MIChar.size = MIChar.maxCoords - MIChar.minCoords;
+
+        MIChar.cylinderRadius = glm::distance(glm::vec3(MIChar.maxCoords.x, 0, MIChar.maxCoords.z),
+                                              glm::vec3(MIChar.minCoords.x, 0, MIChar.minCoords.z)) / 2;
+        MIChar.cylinderHeight = MIChar.maxCoords.y - MIChar.minCoords.y;
+
         return MIChar;
     }
 
-    inline void
-    loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef,
+    inline void loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef,
                std::vector<ModelInfo> *MVRef, ModelType modelType) {
         int posOffset = 0;
         static int polikeaBuildingOffsetsIndex = 0; // Used to count how many objects have been drawn inside polikea
@@ -1088,7 +1074,8 @@ protected:
                 MI.modelPos = polikeaBuildingPosition + polikeaBuildingOffsets[polikeaBuildingOffsetsIndex];
                 polikeaBuildingOffsetsIndex++;
             } else {
-                MI.modelPos = CamPos - glm::vec3(0.0f + posOffset * 2.0f, CamPos.y, 0.0f);
+                //TODO what is this MI.modelPos = CamPos - glm::vec3(0.0f + posOffset * 2.0f, CamPos.y, 0.0f);
+                throw std::invalid_argument("Not implemented");
             }
             MI.modelRot = (MAX_OBJECTS_IN_POLIKEA - polikeaBuildingOffsetsIndex < 3) ? glm::radians(180.0f) : 0.0f;
 
@@ -1357,28 +1344,31 @@ protected:
 
         const float minPitch = glm::radians(-8.75f);
         const float maxPitch = glm::radians(60.0f);
-        CamAlpha = CamAlpha - ROT_SPEED * deltaT * r.y;
-        CamBeta = CamBeta - ROT_SPEED * deltaT * r.x;
-        CamBeta = CamBeta < minPitch ? minPitch : (CamBeta > maxPitch ? maxPitch : CamBeta);
-        CamRho = CamRho - ROT_SPEED * deltaT * r.z;
-        CamRho = CamRho < glm::radians(-180.0f) ? glm::radians(-180.0f) :
-                 (CamRho > glm::radians(180.0f) ? glm::radians(180.0f) : CamRho);
+        cameraYaw = cameraYaw - ROT_SPEED * deltaT * r.y;
+        camPitch = camPitch - ROT_SPEED * deltaT * r.x;
+        camPitch = camPitch < minPitch ? minPitch : (camPitch > maxPitch ? maxPitch : camPitch);
+        camRoll = camRoll - ROT_SPEED * deltaT * r.z;
+        camRoll = camRoll < glm::radians(-180.0f) ? glm::radians(-180.0f) :
+                  (camRoll > glm::radians(180.0f) ? glm::radians(180.0f) : camRoll);
 
-        glm::mat3 CamDir = glm::rotate(glm::mat4(1.0f), CamAlpha, glm::vec3(0, 1, 0)) *
-                           glm::rotate(glm::mat4(1.0f), CamBeta, glm::vec3(1, 0, 0)) *
-                           glm::rotate(glm::mat4(1.0f), CamRho, glm::vec3(0, 0, 1));
+        glm::mat3 CamDir = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0, 1, 0)) *
+                           glm::rotate(glm::mat4(1.0f), camPitch, glm::vec3(1, 0, 0)) *
+                           glm::rotate(glm::mat4(1.0f), camRoll, glm::vec3(0, 0, 1));
 
-        glm::vec3 ux = glm::rotate(glm::mat4(1.0f), CamAlpha, glm::vec3(0, 1, 0)) * glm::vec4(1, 0, 0, 1);
-        glm::vec3 uz = glm::rotate(glm::mat4(1.0f), CamAlpha, glm::vec3(0, 1, 0)) * glm::vec4(0, 0, -1, 1);
+        glm::vec3 ux = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0, 1, 0)) * glm::vec4(1, 0, 0, 1);
+        glm::vec3 uz = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0, 1, 0)) * glm::vec4(0, 0, -1, 1);
 
-        glm::vec3 oldCamPos = CamPos;
-        CamPos = CamPos + MOVE_SPEED * m.x * ux * deltaT;
-        CamPos = CamPos + MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT; //Do not allow to fly
-        CamPos = CamPos + MOVE_SPEED * m.z * uz * deltaT;
+        static glm::vec3 oldCharacterPos = newCharacterPos;
+        newCharacterPos += MOVE_SPEED * m.x * ux * deltaT;
+        newCharacterPos += MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT;
+        newCharacterPos += MOVE_SPEED * m.z * uz * deltaT;
+
+        //static glm::vec3 PosOld = characterPos;
+        glm::vec3 characterPos = oldCharacterPos * std::exp(-10 * deltaT) + newCharacterPos * (1 - std::exp(-10 * deltaT));
 
         for (auto &boundingRectangle: boundingRectangles)
-            if (checkIfInBoundingRectangle(CamPos, boundingRectangle))
-                CamPos = oldCamPos;
+            if (checkIfInBoundingRectangle(characterPos, boundingRectangle))
+                characterPos = oldCharacterPos;
 
         if (isLookAtFire) {
             if (!isLookAtDebounce) {
@@ -1386,8 +1376,6 @@ protected:
                 curIsLookAtDebounce = GLFW_KEY_Z;
                 // If isLookAt is false that means that we're going to see the character and that a potential teleport without the character
                 // may have occurred. Thus, we need to adjust the character's position.
-                if (!isLookAt)
-                    adjustCharacter = true;
                 isLookAt = !isLookAt; // Flip this boolean to change lookAt mode.
             }
         } else if ((curIsLookAtDebounce == GLFW_KEY_Z) && isLookAtDebounce) {
@@ -1408,9 +1396,9 @@ protected:
                 }
                 OnlyMoveCam = true;
             } else {
-                const glm::vec3 modelPos = glm::vec3(CamPos.x, CamPos.y - 1.0f, CamPos.z - 2.0f);
+                const glm::vec3 modelPos = glm::vec3(characterPos.x, characterPos.y - 1.0f, characterPos.z - 2.0f);
                 glm::vec3 oldPos = MV[MoveObjIndex].modelPos;
-                MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(CamPos, CamAlpha, CamBeta, modelPos);
+                MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(characterPos, cameraYaw, camPitch, modelPos);
 
                 for (int i = 0; i < MV.size(); i++) {
                     if (i != MoveObjIndex) {
@@ -1421,7 +1409,7 @@ protected:
                     }
                 }
 
-                MV[MoveObjIndex].modelRot = CamAlpha;
+                MV[MoveObjIndex].modelRot = cameraYaw;
 
                 if (cycleRoom) {
                     if (!roomCyclingDebounce) {
@@ -1432,9 +1420,8 @@ protected:
                             MV[MoveObjIndex].roomCycling++;
                             if (MV[MoveObjIndex].roomCycling >= N_ROOMS)
                                 MV[MoveObjIndex].roomCycling = 0;
-                            CamPos = roomCenters[MV[MoveObjIndex].roomCycling] + glm::vec3(0.0f, 1.0f, 0.0f);
-                            MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(CamPos, CamAlpha, CamBeta,
-                                                                                 modelPos);
+                            characterPos = roomCenters[MV[MoveObjIndex].roomCycling] + glm::vec3(0.0f, 1.0f, 0.0f);
+                            MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(characterPos, cameraYaw, camPitch, modelPos);
                         }
                     }
                 } else if ((curRoomCyclingDebounce == GLFW_KEY_0) && roomCyclingDebounce) {
@@ -1457,10 +1444,10 @@ protected:
         }
 
         for (auto &Door: doors) {
-            if (glm::distance(CamPos, Door.doorPos) <= 3.0f && Door.doorState == CLOSED) {
+            if (glm::distance(characterPos, Door.doorPos) <= 3.0f && Door.doorState == CLOSED) {
                 Door.doorState = OPENING;
             }
-            if (glm::distance(CamPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
+            if (glm::distance(characterPos, Door.doorPos) > 1.5 && Door.doorState == OPEN) {
                 Door.doorState = CLOSING;
             }
             if (Door.doorState == OPENING) {
@@ -1524,10 +1511,10 @@ protected:
                 OnlyMoveCam = !OnlyMoveCam;
 
                 if (!OnlyMoveCam) {
-                    float distance = glm::distance(CamPos, MV[0].modelPos);
+                    float distance = glm::distance(characterPos, MV[0].modelPos);
                     MoveObjIndex = 0;
                     for (std::size_t i = 1; i < MV.size(); ++i) {
-                        float newDistance = glm::distance(CamPos, MV[i].modelPos);
+                        float newDistance = glm::distance(characterPos, MV[i].modelPos);
                         if (newDistance < distance) {
                             distance = newDistance;
                             MoveObjIndex = i;
@@ -1546,37 +1533,76 @@ protected:
             if (!kDebounce) {
                 kDebounce = true;
                 curKDebounce = GLFW_KEY_K;
-                CamPos = polikeaBuildingPosition + glm::vec3(5.0f, 1.0f, 5.0f);
-                CamAlpha = CamBeta = CamRho = 0.0f;
-                // We have to teleport the character.
-                teleportCharacter = true;
-                teleportDestination = polikeaBuildingPosition + glm::vec3(5.0f, 0.0f, 5.0f);
+                characterPos = polikeaBuildingPosition + glm::vec3(5.0f, 0.0f, 5.0f);
+                characterYaw =  cameraYaw = camPitch = camRoll = 0.0f;
             }
         } else if ((curKDebounce == GLFW_KEY_K) && kDebounce) {
             kDebounce = false;
             curKDebounce = 0;
-            teleportCharacter = false; // This ensure that at the next update the teleportation is off.
         }
         if (isHPressed) {
             if (!hDebounce) {
                 hDebounce = true;
                 curHDebounce = GLFW_KEY_H;
-                CamPos = roomCenters[0] + glm::vec3(0.0f, 1.0f, 3.0f);
-                CamAlpha = CamBeta = CamRho = 0.0f;
-                // We have to teleport the character.
-                teleportCharacter = true;
-                teleportDestination = roomCenters[0] + glm::vec3(0.0f, 0.0f, 3.0f);
+                characterPos = roomCenters[0] + glm::vec3(0.0f, 0.0f, 3.0f);
+                characterYaw = cameraYaw = camPitch = camRoll = 0.0f;
             }
         } else if ((curHDebounce == GLFW_KEY_H) && hDebounce) {
             hDebounce = false;
             curHDebounce = 0;
-            teleportCharacter = false; // This ensure that at the next update the teleportation is off.
         }
+
+        // ----- CHARACTER MANIPULATION AND MATRIX GENERATION ----- //
+
+        glm::mat4 World, WorldCharacter, ViewPrj;
+        // We check the bounding of the character for surroundings
+        for (const auto &boundingRectangle: boundingRectangles)
+            if (checkIfInBoundingRectangle(MVCharacter.modelPos, boundingRectangle, 0.15f))
+                MVCharacter.modelPos = oldCharacterPos;
+        // We check the bounding of the character for furniture
+        for (const auto &modelInfo: MV) {
+            if (MVCharacter.checkCollision(modelInfo)) {
+                MVCharacter.modelPos = oldCharacterPos;
+                break;
+            }
+        }
+
+        const float camHeight = CAM_HEIGHT;
+        const float camDist = 2.5;
+
+        // We update the rotation of the character
+        float newAngle = characterYaw;
+        if (std::abs(m.x) > 0 || std::abs(m.z) > 0)
+            newAngle = normalizeAngle(cameraYaw + glm::radians(90.0f) + std::atan2(-m.x, m.z));
+        int dir;
+        auto diff = shortestAngularDistance(characterYaw, newAngle, dir);
+        characterYaw += static_cast<float>(dir) * std::min(deltaT * ROT_SPEED * 4, diff);
+
+        // We update the position of the character
+        MVCharacter.modelPos = characterPos;
+        MVCharacter.modelRot = characterYaw;
+
+        glm::vec3 camPos;
+        if (isLookAt) {
+            camPos = glm::translate(glm::mat4(1.0f), characterPos) *
+                     glm::rotate(glm::mat4(1), cameraYaw, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                     glm::rotate(glm::mat4(1), -camPitch, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                     glm::vec4(0, camHeight, camDist, 1);
+
+            // Next we call the GameLogic() function to compute the lookAt matrices
+            getLookAt(Ar, ViewPrj, WorldCharacter, deltaT, camPos, characterPos, characterYaw);
+            // At the end put this to false since the adjustment has occurred (if it was needed).
+        } else {
+            // Otherwise we normally build our View-Projection matrix.
+            camPos = glm::translate(glm::mat4(1.0f), characterPos)  * glm::vec4(0, camHeight, 0, 1);
+            ViewPrj = MakeViewProjectionMatrix(Ar, cameraYaw, camPitch, camRoll, camPos);
+        }
+        // ----- END CHARACTER MANIPULATION AND MATRIX GENERATION ----- //
 
         gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
         gubo.DlightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
         gubo.AmbLightColor = glm::vec3(1.0f);
-        gubo.eyePos = CamPos;
+        gubo.eyePos = camPos;
 
         size_t indexSpot = 0;
         size_t indexPoint = 0;
@@ -1621,80 +1647,15 @@ protected:
         gubo.nPointLights = indexPoint;
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
-        // ----- CHARACTER MANIPULATION AND MATRIX GENERATION ----- //
-
-        glm::mat4 World, WorldCharacter, ViewPrj;
-
-        // We update the position of the character
-        glm::vec3 oldCharacterPos = MVCharacter.modelPos;
-        MVCharacter.modelPos += deltaT * ux * m.x * MOVE_SPEED;
-        MVCharacter.modelPos += deltaT * glm::vec3(0, 1, 0) * m.y * MOVE_SPEED;
-        MVCharacter.modelPos += deltaT * uz * m.z * MOVE_SPEED;
-
-        // We check the bounding of the character for surroundings
-        for (const auto &boundingRectangle: boundingRectangles)
-            if (checkIfInBoundingRectangle(MVCharacter.modelPos, boundingRectangle, 0.15f))
-                MVCharacter.modelPos = oldCharacterPos;
-        // We check the bounding of the character for furniture
-        for (const auto &modelInfo: MV) {
-            if (MVCharacter.checkCollision(modelInfo)) {
-                MVCharacter.modelPos = oldCharacterPos;
-                break;
-            }
-        }
-
-        // We update the rotation of the character
-        float newAngle = MVCharacter.modelRot;
-        if (std::abs(m.x) > 0 || std::abs(m.z) > 0)
-            newAngle = normalizeAngle(-CamAlpha - glm::radians(90.0f) + std::atan2(m.x, m.z));
-        int dir;
-        auto diff = shortestAngularDistance(MVCharacter.modelRot, newAngle, dir);
-        MVCharacter.modelRot += static_cast<float>(dir) * std::min(deltaT * ROT_SPEED * 4, diff);
-
-        if (isLookAt) {
-            // Here we build the lookAt matrix
-            // First we have to determine if the character must teleport or not (either from a normal teleportation or just for adjustment).
-            bool activateTeleport = adjustCharacter || teleportCharacter;
-            // Then we determine the teleport location (the first case is for adjustment,
-            // the second for actual teleportation when pressing K or H while seeing the character).
-            glm::vec3 teleportTo = adjustCharacter ? CamPos - glm::vec3(0.0f, CamPos.y, 0.0f) : teleportDestination;
-
-            // If we have to teleport we must update the character position accordingly
-            if (activateTeleport) MVCharacter.modelPos = teleportTo;
-
-            // TODO THERE IS A PROBLEM WITH CAMERA AND CHARACTER, SINCE THE BOUNDING ARE NOT THE SAME
-            // I don't like this, but it works...
-            CamPos = MVCharacter.modelPos + glm::vec3(0.0, 1.0, 0.0);
-
-            // Next we call the GameLogic() function to compute the lookAt matrices
-            getLookAt(Ar, ViewPrj, WorldCharacter,
-                      {deltaT, -CamAlpha, CamBeta, CamRho},
-                      MVCharacter.modelPos, MVCharacter.modelRot);
-            // At the end put this to false since the adjustment has occurred (if it was needed).
-            adjustCharacter = false;
-        } else {
-            // Otherwise we normally build our View-Projection matrix.
-            ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
-        }
-
-        // TODO delete this
-        std::cout << "CAMPOSx:" << CamPos.x << std::endl;
-        std::cout << "CAMPOSy:" << CamPos.y << std::endl;
-        std::cout << "CAMPOSz:" << CamPos.z << std::endl;
-        std::cout << "MVCHARACTERx:" << MVCharacter.modelPos.x << std::endl;
-        std::cout << "MVCHARACTERy:" << MVCharacter.modelPos.y << std::endl;
-        std::cout << "MVCHARACTERz:" << MVCharacter.modelPos.z << std::endl;
-
-        // ----- END CHARACTER MANIPULATION AND MATRIX GENERATION ----- //
-
+        // UBO POLIKEA
         uboPolikea.amb = 0.05f;
         uboPolikea.gamma = 180.0f;
         uboPolikea.sColor = glm::vec3(1.0f);
-        uboPolikea.worldMat =
-                glm::translate(glm::mat4(1), polikeaBuildingPosition) * glm::scale(glm::mat4(1), glm::vec3(5.0f));
+        uboPolikea.worldMat = glm::translate(glm::mat4(1), polikeaBuildingPosition) * glm::scale(glm::mat4(1), glm::vec3(5.0f));
         uboPolikea.nMat = glm::inverse(uboPolikea.worldMat);
         uboPolikea.mvpMat = ViewPrj * uboPolikea.worldMat;
         DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
+        //END UBO POLIKEA
 
         uboBuilding.amb = 0.05f;
         uboBuilding.gamma = 180.0f;
@@ -1706,7 +1667,7 @@ protected:
 
         bool displayKey = false;
         for (auto &modelInfo: MV) {
-            float distance = glm::distance(CamPos, modelInfo.modelPos);
+            float distance = glm::distance(characterPos, modelInfo.modelPos);
             if (distance <= threshold) {
                 displayKey = true;
                 break;
@@ -1716,7 +1677,7 @@ protected:
         uboKey.visible = (OnlyMoveCam && displayKey) ? 1.0f : 0.0f;
         bool buyOrMoveOverlay = displayKey &&
                                 checkIfInBoundingRectangle(
-                                        CamPos,
+                                        characterPos,
                                         BoundingRectangle{
                                                 glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f,
                                                           polikeaBuildingPosition.z + 0.5f),
@@ -1779,11 +1740,12 @@ protected:
         MVCharacter.modelUBO.amb = 0.05f;
         MVCharacter.modelUBO.gamma = 180.0f;
         MVCharacter.modelUBO.sColor = glm::vec3(1.0f);
-        MVCharacter.modelUBO.worldMat =
-                WorldCharacter * glm::scale(glm::mat4(1), (isLookAt) ? glm::vec3(2.0f) : glm::vec3(0.0f));
+        MVCharacter.modelUBO.worldMat = WorldCharacter * glm::scale(glm::mat4(1), (isLookAt) ? glm::vec3(2.0f) : glm::vec3(0.0f));
         MVCharacter.modelUBO.nMat = glm::inverse(MVCharacter.modelUBO.worldMat);
         MVCharacter.modelUBO.mvpMat = ViewPrj * MVCharacter.modelUBO.worldMat;
         MVCharacter.dsModel.map(currentImage, &MVCharacter.modelUBO, sizeof(MVCharacter.modelUBO), 0);
+
+        oldCharacterPos = characterPos;
     }
 };
 
