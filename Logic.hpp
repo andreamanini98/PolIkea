@@ -1,7 +1,7 @@
 #include <cmath>
 #include <iostream>
 
-#define CAM_HEIGHT 1.2
+#define CAM_HEIGHT 1.0f
 
 // Struct containing the parameters to be passed from VTemplate.cpp
 struct LookAtStuff {

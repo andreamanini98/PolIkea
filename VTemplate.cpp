@@ -1378,7 +1378,7 @@ protected:
                 // If isLookAt is false that means that we're going to see the character and that a potential teleport without the character
                 // may have occurred. Thus, we need to adjust the character's position.
                 isLookAt = !isLookAt; // Flip this boolean to change lookAt mode.
-                characterYaw = cameraYaw;
+                characterYaw = cameraYaw + glm::radians(90.0f);
             }
         } else if ((curIsLookAtDebounce == GLFW_KEY_Z) && isLookAtDebounce) {
             isLookAtDebounce = false;
