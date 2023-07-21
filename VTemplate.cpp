@@ -762,7 +762,7 @@ protected:
     bool teleportCharacter = false;         // Used to set the character position when pressing teleporting keys (K, H).
     glm::vec3 teleportDestination = CamPos; // The teleport destination (here CamPos is just an initialization).
     bool adjustCharacter = true;            // Boolean that is true when we move teleport the camera in first person).
-    bool isLookAt = true;                   // Tells if we use the look at technique or not.
+    bool isLookAt = false;                  // Tells if we use the look at technique or not.
 
     std::vector<glm::vec3> roomCenters;
     std::vector<BoundingRectangle> roomOccupiedArea;
@@ -1621,25 +1621,59 @@ protected:
         gubo.nPointLights = indexPoint;
         DSGubo.map(currentImage, &gubo, sizeof(gubo), 0);
 
+        // ----- CHARACTER MANIPULATION AND MATRIX GENERATION ----- //
+
         glm::mat4 World, WorldCharacter, ViewPrj;
+
+        // We update the position of the character
+        glm::vec3 oldCharacterPos = MVCharacter.modelPos;
+        MVCharacter.modelPos += deltaT * ux * m.x * MOVE_SPEED;
+        MVCharacter.modelPos += deltaT * glm::vec3(0, 1, 0) * m.y * MOVE_SPEED;
+        MVCharacter.modelPos += deltaT * uz * m.z * MOVE_SPEED;
+
+        // We check the bounding of the character for surroundings
+        for (const auto &boundingRectangle: boundingRectangles)
+            if (checkIfInBoundingRectangle(MVCharacter.modelPos, boundingRectangle, 0.15f))
+                MVCharacter.modelPos = oldCharacterPos;
+        // We check the bounding of the character for furniture
+        for (const auto & modelInfo : MV) {
+            if (MVCharacter.checkCollision(modelInfo)) {
+                MVCharacter.modelPos = oldCharacterPos;
+                break;
+            }
+        }
+
+        // We update the rotation of the character
+        float newAngle = MVCharacter.modelRot;
+        if (std::abs(m.x) > 0 || std::abs(m.z) > 0)
+            newAngle = normalizeAngle(-CamAlpha - glm::radians(90.0f) + std::atan2(m.x, m.z));
+        int dir;
+        auto diff = shortestAngularDistance(MVCharacter.modelRot, newAngle, dir);
+        MVCharacter.modelRot += static_cast<float>(dir) * std::min(deltaT * ROT_SPEED * 4, diff);
+
         if (isLookAt) {
             // Here we build the lookAt matrix
             // First we have to determine if the character must teleport or not (either from a normal teleportation or just for adjustment).
             bool activateTeleport = adjustCharacter || teleportCharacter;
             // Then we determine the teleport location (the first case is for adjustment,
             // the second for actual teleportation when pressing K or H while seeing the character).
-            glm::vec3 teleport = adjustCharacter ? CamPos - glm::vec3(0.0f, CamPos.y, 0.0f) : teleportDestination;
+            glm::vec3 teleportTo = adjustCharacter ? CamPos - glm::vec3(0.0f, CamPos.y, 0.0f) : teleportDestination;
+
+            // If we have to teleport we must update the character position accordingly
+            if (activateTeleport) MVCharacter.modelPos = teleportTo;
 
             // Next we call the GameLogic() function to compute the lookAt matrices
             getLookAt(Ar, ViewPrj, WorldCharacter,
-                      {m, deltaT, -CamAlpha, CamBeta, CamRho, ux, uz, MVCharacter.modelRot, MVCharacter.modelPos},
-                      activateTeleport, teleport, boundingRectangles);
+                      {deltaT, -CamAlpha, CamBeta, CamRho},
+                      MVCharacter.modelPos, MVCharacter.modelRot);
             // At the end put this to false since the adjustment has occurred (if it was needed).
             adjustCharacter = false;
         } else {
             // Otherwise we normally build our View-Projection matrix.
             ViewPrj = MakeViewProjectionMatrix(Ar, CamAlpha, CamBeta, CamRho, CamPos);
         }
+
+        // ----- END CHARACTER MANIPULATION AND MATRIX GENERATION ----- //
 
         uboPolikea.amb = 0.05f;
         uboPolikea.gamma = 180.0f;
@@ -1659,8 +1693,8 @@ protected:
         DSBuilding.map(currentImage, &uboBuilding, sizeof(uboBuilding), 0);
 
         bool displayKey = false;
-        for (std::size_t i = 1; i < MV.size(); ++i) {
-            float distance = glm::distance(CamPos, MV[i].modelPos);
+        for (auto & modelInfo : MV) {
+            float distance = glm::distance(CamPos, modelInfo.modelPos);
             if (distance <= threshold) {
                 displayKey = true;
                 break;
