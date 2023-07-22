@@ -868,7 +868,7 @@ protected:
                             MV[MoveObjIndex].roomCycling++;
                             if (MV[MoveObjIndex].roomCycling >= N_ROOMS)
                                 MV[MoveObjIndex].roomCycling = 0;
-                            newCharacterPos = characterPos = roomCenters[MV[MoveObjIndex].roomCycling] + glm::vec3(0.0f, 1.0f, 0.0f);
+                            newCharacterPos = characterPos = roomCenters[MV[MoveObjIndex].roomCycling];
                             MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(characterPos, cameraYaw, camPitch, modelPos);
                         }
                     }
