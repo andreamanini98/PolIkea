@@ -1900,7 +1900,7 @@ protected:
 		}
 	}
 
-	void getSixAxis(float &deltaT, glm::vec3 &m, glm::vec3 &r, bool &fire, bool &lightSwitch, bool &cycleRoom, bool &isLookAtFire, bool &isKPressed, bool &isHPressed) {
+	void getSixAxis(float &deltaT, glm::vec3 &m, glm::vec3 &r, bool &fire, bool &lightSwitch, bool &cycleRoom, bool &isLookAtFire, bool &isKPressed, bool &isHPressed, bool &isVPressed) {
 		static auto startTime = std::chrono::high_resolution_clock::now();
 		static float lastTime = 0.0f;
 
@@ -1967,6 +1967,7 @@ protected:
         isLookAtFire = glfwGetKey(window, GLFW_KEY_Z) == GLFW_PRESS;
         isKPressed = glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS;
         isHPressed = glfwGetKey(window, GLFW_KEY_H) == GLFW_PRESS;
+        isVPressed = glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS;
 		handleGamePad(GLFW_JOYSTICK_1,m,r,fire);
 		handleGamePad(GLFW_JOYSTICK_2,m,r,fire);
 		handleGamePad(GLFW_JOYSTICK_3,m,r,fire);

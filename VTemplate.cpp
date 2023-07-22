@@ -96,6 +96,7 @@ struct HouseBindings {
     BoundingRectangle externPolikeaBoundings[4];
 };
 
+
 // ----- MODEL INFO STRUCT ----- //
 
 // Struct used to store data related to a model
@@ -190,14 +191,15 @@ protected:
     std::vector<glm::vec3> positionedLightPos = getPolikeaPositionedLightsPos();
 
     glm::vec3 newCharacterPos;
-    glm::vec3& characterPos = MVCharacter.modelPos;
+    glm::vec3 &characterPos = MVCharacter.modelPos;
     float characterYaw = MVCharacter.modelRot;
     float cameraYaw = 0.0f;
     float camPitch = 0.0f;
     float camRoll = 0.0f;
     bool OnlyMoveCam = true;
     uint32_t MoveObjIndex = 0;
-    bool isLookAt = false;                  // Tells if we use the look at technique or not.
+    bool isLookAt = false; // Tells if we use the look at technique or not.
+    bool fly = false;
 
     std::vector<glm::vec3> roomCenters;
     std::vector<BoundingRectangle> roomOccupiedArea;
@@ -491,7 +493,7 @@ protected:
     }
 
     inline void loadModels(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef,
-               std::vector<ModelInfo> *MVRef, ModelType modelType) {
+                           std::vector<ModelInfo> *MVRef, ModelType modelType) {
         int posOffset = 0;
         static int polikeaBuildingOffsetsIndex = 0; // Used to count how many objects have been drawn inside polikea
 
@@ -772,13 +774,13 @@ protected:
         const float ROT_SPEED = glm::radians(120.0f);
         const float MOVE_SPEED = 4.0f;
 
-        static bool debounce, lightDebounce, roomCyclingDebounce, isLookAtDebounce, kDebounce, hDebounce = false;
-        static int curDebounce, curLightDebounce, curRoomCyclingDebounce, curIsLookAtDebounce, curKDebounce, curHDebounce = 0;
+        static bool debounce, lightDebounce, roomCyclingDebounce, isLookAtDebounce, kDebounce, hDebounce, flyDebounce = false;
+        static int curDebounce, curLightDebounce, curRoomCyclingDebounce, curIsLookAtDebounce, curKDebounce, curHDebounce, curFlyDebounce = 0;
 
         float deltaT;
         auto m = glm::vec3(0.0f), r = glm::vec3(0.0f);
-        bool fire, lightSwitch, cycleRoom, isLookAtFire, isKPressed, isHPressed = false;
-        getSixAxis(deltaT, m, r, fire, lightSwitch, cycleRoom, isLookAtFire, isKPressed, isHPressed);
+        bool fire, lightSwitch, cycleRoom, isLookAtFire, isKPressed, isHPressed, isVPressed = false;
+        getSixAxis(deltaT, m, r, fire, lightSwitch, cycleRoom, isLookAtFire, isKPressed, isHPressed, isVPressed);
 
         const float minPitch = glm::radians(-30.0f);
         const float maxPitch = glm::radians(30.0f);
@@ -795,8 +797,17 @@ protected:
 
         static glm::vec3 oldCharacterPos = newCharacterPos;
         newCharacterPos += MOVE_SPEED * m.x * ux * deltaT;
-        newCharacterPos += MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT;
         newCharacterPos += MOVE_SPEED * m.z * uz * deltaT;
+        if (fly) {
+            newCharacterPos += MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT;
+        } else {
+            if (checkIfInBoundingRectangle(characterPos,getSecondStepBoundingRectangle()))
+                newCharacterPos.y = 0.5f;
+            else if (checkIfInBoundingRectangle(characterPos,getFirstStepBoundingRectangle()))
+                newCharacterPos.y = 0.25f;
+            else
+                newCharacterPos.y = 0.0f;
+        }
         characterPos = oldCharacterPos * std::exp(-10 * deltaT) + newCharacterPos * (1 - std::exp(-10 * deltaT));
 
         // We update the rotation of the character
@@ -823,6 +834,17 @@ protected:
         } else if ((curIsLookAtDebounce == GLFW_KEY_Z) && isLookAtDebounce) {
             isLookAtDebounce = false;
             curIsLookAtDebounce = 0;
+        }
+
+        if (isVPressed) {
+            if (!flyDebounce) {
+                flyDebounce = true;
+                curFlyDebounce = GLFW_KEY_V;
+                fly = !fly;
+            }
+        } else if ((curFlyDebounce == GLFW_KEY_V) && flyDebounce) {
+            flyDebounce = false;
+            curFlyDebounce = 0;
         }
 
         if (!OnlyMoveCam) {
@@ -863,7 +885,7 @@ protected:
                             if (MV[MoveObjIndex].roomCycling >= N_ROOMS)
                                 MV[MoveObjIndex].roomCycling = 0;
                             newCharacterPos = characterPos = roomCenters[MV[MoveObjIndex].roomCycling];
-                            MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(characterPos, cameraYaw, camPitch, modelPos);
+                            MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(characterPos, cameraYaw, camPitch,modelPos);
                         }
                     }
                 } else if ((curRoomCyclingDebounce == GLFW_KEY_0) && roomCyclingDebounce) {
@@ -976,7 +998,8 @@ protected:
                 kDebounce = true;
                 curKDebounce = GLFW_KEY_K;
                 newCharacterPos = characterPos = polikeaBuildingPosition + glm::vec3(5.0f, 0.0f, 5.0f);
-                characterYaw =  cameraYaw = camPitch = camRoll = 0.0f;
+                characterYaw = glm::radians(90.0f);
+                cameraYaw = camPitch = camRoll = 0.0f;
             }
         } else if ((curKDebounce == GLFW_KEY_K) && kDebounce) {
             kDebounce = false;
@@ -987,7 +1010,8 @@ protected:
                 hDebounce = true;
                 curHDebounce = GLFW_KEY_H;
                 newCharacterPos = characterPos = roomCenters[0] + glm::vec3(0.0f, 0.0f, 3.0f);
-                characterYaw = cameraYaw = camPitch = camRoll = 0.0f;
+                characterYaw = glm::radians(90.0f);
+                cameraYaw = camPitch = camRoll = 0.0f;
             }
         } else if ((curHDebounce == GLFW_KEY_H) && hDebounce) {
             hDebounce = false;
@@ -1023,9 +1047,10 @@ protected:
             // At the end put this to false since the adjustment has occurred (if it was needed).
         } else {
             // Otherwise we normally build our View-Projection matrix.
-            camPos = glm::translate(glm::mat4(1.0f), characterPos)  * glm::vec4(0, camHeight, 0, 1);
+            camPos = glm::translate(glm::mat4(1.0f), characterPos) * glm::vec4(0, camHeight, 0, 1);
             ViewPrj = MakeViewProjectionMatrix(Ar, cameraYaw, camPitch, camRoll, camPos);
         }
+
         // ----- END CHARACTER MANIPULATION AND MATRIX GENERATION ----- //
 
         gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
