@@ -183,8 +183,8 @@ public:
         UVWidth += DOOR_HWIDTH * 2 * WALL_TEXTURES_PER_PIXEL;
         drawRect(openingV1, v1, v2, ceilingOpeningV12, vecDir, texID, {UVWidth, 0});
 
-        glm::vec3 bOffset = glm::vec3(-0.2, 0.0, 0.2);
-        glm::vec3 tOffset = glm::vec3(0.2, 0.0, -0.2);
+        glm::vec3 bOffset = glm::vec3(-0.1, 0.0, 0.1);
+        glm::vec3 tOffset = glm::vec3(0.1, 0.0, -0.1);
         // Placing boundings on walls with doors
         if (doorDirection == NORTH || doorDirection == SOUTH) {
             bounds->push_back(
@@ -368,8 +368,8 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
             }
         }
 
-        glm::vec3 bOffset = glm::vec3(-0.2, 0.0, 0.2);
-        glm::vec3 tOffset = glm::vec3(0.2, 0.0, -0.2);
+        glm::vec3 bOffset = glm::vec3(-0.1, 0.0, 0.1);
+        glm::vec3 tOffset = glm::vec3(0.1, 0.0, -0.1);
         // Checks to put boundings on walls without doors
         if (!hasDoorSouth) {
             bounds->push_back(
