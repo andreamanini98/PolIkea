@@ -189,8 +189,9 @@ protected:
                                                                               SIDEOFFSET, BACKOFFSET);
     std::vector<glm::vec3> positionedLightPos = getPolikeaPositionedLightsPos();
 
-    glm::vec3 newCharacterPos = glm::vec3(2.0, 0.0, 3.45706);
-    float characterYaw = 0.0f;
+    glm::vec3 newCharacterPos;
+    glm::vec3& characterPos = MVCharacter.modelPos;
+    float characterYaw = MVCharacter.modelRot;
     float cameraYaw = 0.0f;
     float camPitch = 0.0f;
     float camRoll = 0.0f;
@@ -469,8 +470,8 @@ protected:
     inline ModelInfo loadCharacter(const std::string &path, VTemplate *thisVTemplate, VertexDescriptor *VMeshRef, ModelType modelType) {
         ModelInfo MIChar;
         MIChar.model.init(thisVTemplate, VMeshRef, path, modelType);
-        MIChar.modelPos = newCharacterPos;
-        MIChar.modelRot = characterYaw;
+        newCharacterPos = MIChar.modelPos = glm::vec3(2.0, 0.0, 3.45706);
+        MIChar.modelRot = 0.0f;
 
         MIChar.minCoords = glm::vec3(std::numeric_limits<float>::max());
         MIChar.maxCoords = glm::vec3(std::numeric_limits<float>::lowest());
@@ -802,7 +803,15 @@ protected:
         newCharacterPos += MOVE_SPEED * m.z * uz * deltaT;
 
         //static glm::vec3 PosOld = characterPos;
-        glm::vec3 characterPos = oldCharacterPos * std::exp(-10 * deltaT) + newCharacterPos * (1 - std::exp(-10 * deltaT));
+        characterPos = oldCharacterPos * std::exp(-10 * deltaT) + newCharacterPos * (1 - std::exp(-10 * deltaT));
+
+        // We update the rotation of the character
+        float newAngle = characterYaw;
+        if (std::abs(m.x) > 0 || std::abs(m.z) > 0)
+            newAngle = normalizeAngle(cameraYaw + glm::radians(90.0f) + std::atan2(-m.x, m.z));
+        int dir;
+        auto diff = shortestAngularDistance(characterYaw, newAngle, dir);
+        characterYaw += static_cast<float>(dir) * std::min(deltaT * ROT_SPEED * 4, diff);
 
         for (auto &boundingRectangle: boundingRectangles)
             if (checkIfInBoundingRectangle(characterPos, boundingRectangle))
@@ -1008,19 +1017,6 @@ protected:
 
         const float camHeight = CAM_HEIGHT;
         const float camDist = 2.2f;
-
-        // We update the rotation of the character
-        float newAngle = characterYaw;
-        if (std::abs(m.x) > 0 || std::abs(m.z) > 0)
-            newAngle = normalizeAngle(cameraYaw + glm::radians(90.0f) + std::atan2(-m.x, m.z));
-        int dir;
-        auto diff = shortestAngularDistance(characterYaw, newAngle, dir);
-        characterYaw += static_cast<float>(dir) * std::min(deltaT * ROT_SPEED * 4, diff);
-
-        // We update the position of the character
-        MVCharacter.modelPos = characterPos;
-        MVCharacter.modelRot = characterYaw;
-
         glm::vec3 camPos;
         if (isLookAt) {
             camPos = glm::translate(glm::mat4(1.0f), characterPos) *
