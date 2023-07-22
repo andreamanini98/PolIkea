@@ -10,17 +10,14 @@ glm::mat4 MakeViewProjectionMatrix(float Ar, float Alpha, float Beta, float Rho,
     float n = 0.1;
     float f = 50.0;
     float tetha = glm::radians(60.0f);
-    glm::vec3 Z = glm::vec3(0, 0, 0); // Used to negate the Pos vector
 
-    glm::mat4 P = glm::mat4(1 / (Ar * tan(tetha / 2)), 0, 0, 0,
-                            0, -1 / (tan(tetha / 2)), 0, 0,
-                            0, 0, f / (n - f), -1,
-                            0, 0, n * f / (n - f), 0);
+    glm::mat4 P = glm::perspective(tetha, Ar, n, f);
+    P[1][1] *= -1;
 
     glm::mat4 M = glm::rotate(glm::mat4(1.0), -Rho, glm::vec3(0, 0, 1)) *
                   glm::rotate(glm::mat4(1.0), -Beta, glm::vec3(1, 0, 0)) *
                   glm::rotate(glm::mat4(1.0), -Alpha, glm::vec3(0, 1, 0)) *
-                  glm::translate(glm::mat4(1.0), Z - Pos);
+                  glm::translate(glm::mat4(1.0), -Pos);
 
     return P * M;
 }
