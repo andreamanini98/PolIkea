@@ -790,10 +790,6 @@ protected:
         camRoll = camRoll < glm::radians(-180.0f) ? glm::radians(-180.0f) :
                   (camRoll > glm::radians(180.0f) ? glm::radians(180.0f) : camRoll);
 
-        glm::mat3 CamDir = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0, 1, 0)) *
-                           glm::rotate(glm::mat4(1.0f), camPitch, glm::vec3(1, 0, 0)) *
-                           glm::rotate(glm::mat4(1.0f), camRoll, glm::vec3(0, 0, 1));
-
         glm::vec3 ux = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0, 1, 0)) * glm::vec4(1, 0, 0, 1);
         glm::vec3 uz = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0, 1, 0)) * glm::vec4(0, 0, -1, 1);
 
@@ -801,8 +797,6 @@ protected:
         newCharacterPos += MOVE_SPEED * m.x * ux * deltaT;
         newCharacterPos += MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT;
         newCharacterPos += MOVE_SPEED * m.z * uz * deltaT;
-
-        //static glm::vec3 PosOld = characterPos;
         characterPos = oldCharacterPos * std::exp(-10 * deltaT) + newCharacterPos * (1 - std::exp(-10 * deltaT));
 
         // We update the rotation of the character
