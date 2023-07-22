@@ -806,7 +806,7 @@ protected:
 
         for (auto &boundingRectangle: boundingRectangles)
             if (checkIfInBoundingRectangle(characterPos, boundingRectangle))
-                characterPos = oldCharacterPos;
+                newCharacterPos = characterPos = oldCharacterPos;
 
         if (isLookAtFire) {
             if (!isLookAtDebounce) {
@@ -859,7 +859,7 @@ protected:
                             MV[MoveObjIndex].roomCycling++;
                             if (MV[MoveObjIndex].roomCycling >= N_ROOMS)
                                 MV[MoveObjIndex].roomCycling = 0;
-                            characterPos = roomCenters[MV[MoveObjIndex].roomCycling] + glm::vec3(0.0f, 1.0f, 0.0f);
+                            newCharacterPos = characterPos = roomCenters[MV[MoveObjIndex].roomCycling] + glm::vec3(0.0f, 1.0f, 0.0f);
                             MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(characterPos, cameraYaw, camPitch, modelPos);
                         }
                     }
@@ -972,7 +972,7 @@ protected:
             if (!kDebounce) {
                 kDebounce = true;
                 curKDebounce = GLFW_KEY_K;
-                characterPos = polikeaBuildingPosition + glm::vec3(5.0f, 0.0f, 5.0f);
+                newCharacterPos = characterPos = polikeaBuildingPosition + glm::vec3(5.0f, 0.0f, 5.0f);
                 characterYaw =  cameraYaw = camPitch = camRoll = 0.0f;
             }
         } else if ((curKDebounce == GLFW_KEY_K) && kDebounce) {
@@ -983,7 +983,7 @@ protected:
             if (!hDebounce) {
                 hDebounce = true;
                 curHDebounce = GLFW_KEY_H;
-                characterPos = roomCenters[0] + glm::vec3(0.0f, 0.0f, 3.0f);
+                newCharacterPos = characterPos = roomCenters[0] + glm::vec3(0.0f, 0.0f, 3.0f);
                 characterYaw = cameraYaw = camPitch = camRoll = 0.0f;
             }
         } else if ((curHDebounce == GLFW_KEY_H) && hDebounce) {
@@ -997,11 +997,11 @@ protected:
         // We check the bounding of the character for surroundings
         for (const auto &boundingRectangle: boundingRectangles)
             if (checkIfInBoundingRectangle(characterPos, boundingRectangle, 0.15f))
-                characterPos = oldCharacterPos;
+                newCharacterPos = characterPos = oldCharacterPos;
         // We check the bounding of the character for furniture
         for (const auto &modelInfo: MV) {
             if (MVCharacter.checkCollision(modelInfo)) {
-                characterPos = oldCharacterPos;
+                newCharacterPos = characterPos = oldCharacterPos;
                 break;
             }
         }
