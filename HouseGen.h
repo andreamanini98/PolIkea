@@ -13,10 +13,7 @@
 #include "Vertex.h"
 
 #define WALL_TEXTURES_PER_PIXEL (1.0f/4.0)
-//REMEMBER TO UPDATE THIS FIELD ALSO IN THE ShaderInstanced.vert
 #define N_ROOMS 5
-#define N_POS_LIGHTS (4 + 5) // 4 lights for polikea + one light for each room
-
 #define MIN_DIMENSION (12.5f)
 #define MAX_DIMENSION (18.0f)
 #define DOOR_HWIDTH (0.5f)
@@ -24,7 +21,6 @@
 
 #define ROOM_CEILING_HEIGHT 3.0f
 #define DOOR_HEIGHT 2.5f
-
 
 // ----- ENUM ----- //
 
@@ -311,7 +307,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
 
         glm::vec3 roomCenter = glm::vec3(room.startX + room.width / 2, ROOM_CEILING_HEIGHT,
                                          room.startY + room.depth / 2);
-        positionedLightPos->push_back(roomCenter);
+        positionedLightPos->push_back(roomCenter); //LIGHTS
         roomCenters->push_back(roomCenter - glm::vec3(0.0f, ROOM_CEILING_HEIGHT, 0.0f));
 
         auto color = glm::vec3((test % 3) == 0, (test % 3) == 1, (test % 3) == 2);

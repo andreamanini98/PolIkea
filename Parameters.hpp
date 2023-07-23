@@ -1,3 +1,5 @@
+#pragma once
+
 // To check if a point is inside a bounding rectangle, you have to check if its x and z coordinates are in between
 // the ones of the bottom left and top right (additionally you can also check for the y coordinate if needed).
 struct BoundingRectangle {
@@ -45,7 +47,7 @@ std::vector<glm::vec3> getPolikeaPositionedLightsPos() {
 
 
 // Used to get the bounding for polikea and fences
-std::vector<BoundingRectangle> getBoundingRectangles(
+std::vector<BoundingRectangle> getPolikeaBoundingRectangles(
         glm::vec3 polikeaBuildingPosition,
         float frontOffset,
         float sideOffset,

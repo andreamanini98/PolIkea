@@ -8,9 +8,8 @@
 #include <random>
 #include <unordered_set>
 #include "HouseGen.h"
+#include "UniformBuffers.h"
 
-#define N_SPOTLIGHTS 50
-#define N_POINTLIGHTS 50
 #define MAX_OBJECTS_IN_POLIKEA 15 // Do not exceed 15 since the model is pre-generated using Blender
 
 #define FRONTOFFSET 10.0f
@@ -19,86 +18,7 @@
 
 namespace fs = std::filesystem;
 
-// ----- GENERIC STRUCT ----- //
-
-struct ModelInstance {
-    float baseRot;
-    glm::vec3 pos;
-    int instanceType; // 0 == doors, 1 == lights (used in the shader)
-};
-
-
-// ----- LIGHT STRUCT ----- //
-
-struct SpotLight {
-    alignas(4) float beta;   // decay exponent of the spotlight
-    alignas(4) float g;      // target distance of the spotlight
-    alignas(4) float cosout; // cosine of the outer angle of the spotlight
-    alignas(4) float cosin;  // cosine of the inner angle of the spotlight
-    alignas(16) glm::vec3 lightPos;
-    alignas(16) glm::vec3 lightDir;
-    alignas(16) glm::vec4 lightColor;
-};
-
-struct PointLight {
-    alignas(4) float beta;   // decay exponent of the spotlight
-    alignas(4) float g;      // target distance of the spotlight
-    alignas(16) glm::vec3 lightPos;
-    alignas(16) glm::vec4 lightColor;
-};
-
-
-// ----- UNIFORM BUFFERS STRUCT ----- //
-
-// The uniform buffer objects data structures
-// Remember to use the correct alignas(...) value
-//     float : alignas(4)
-//     vec2  : alignas(8)
-//     vec3  : alignas(16)
-//     vec4  : alignas(16)
-//     mat3  : alignas(16)
-//     mat4  : alignas(16)
-struct UniformBlock {
-    alignas(4) float amb;
-    alignas(4) float gamma;
-    alignas(16) glm::vec3 sColor;
-    alignas(16) glm::mat4 mvpMat;
-    alignas(16) glm::mat4 worldMat;
-    alignas(16) glm::mat4 nMat;
-};
-
-struct UniformBlockDoors {
-    alignas(4) float amb;
-    alignas(4) float gamma;
-    alignas(16) glm::vec3 sColor;
-    alignas(16) glm::mat4 prjViewMat;
-    alignas(16) glm::vec4 door[N_ROOMS - 1 + 2]; // We have 2 more doors for polikea
-};
-
-struct GlobalUniformBlock {
-    alignas(16) glm::vec3 DlightDir;
-    alignas(16) glm::vec3 DlightColor;
-    alignas(16) glm::vec3 AmbLightColor;
-    alignas(16) glm::vec3 eyePos;
-    SpotLight spotLights[N_SPOTLIGHTS];
-    PointLight pointLights[N_POINTLIGHTS];
-    alignas(4) int nSpotLights;
-    alignas(4) int nPointLights;
-};
-
-struct OverlayUniformBlock {
-    alignas(4) int visible;
-    alignas(4) int overlayTex;
-};
-
-struct HouseBindings {
-    BoundingRectangle roomsArea[N_ROOMS];
-    BoundingRectangle externPolikeaBoundings[4];
-};
-
-
 // ----- MODEL INFO STRUCT ----- //
-
 // Struct used to store data related to a model
 struct ModelInfo {
     Model<Vertex> model;
@@ -176,7 +96,7 @@ protected:
     // C++ storage for uniform variables
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
-    OverlayUniformBlock uboKey;
+    OverlayUniformBlock uboMoveOrBuyOverlay;
     HouseBindings uboHouseBindings;
 
     // Other application parameters
@@ -184,10 +104,13 @@ protected:
     std::vector<ModelInfo> MV;
     ModelInfo MVCharacter;
 
+    //Used for placing automatically the objects inside polikea.
     glm::vec3 polikeaBuildingPosition = getPolikeaBuildingPosition();
     std::vector<glm::vec3> polikeaBuildingOffsets = getPolikeaBuildingOffsets();
-    std::vector<BoundingRectangle> boundingRectangles = getBoundingRectangles(polikeaBuildingPosition, FRONTOFFSET,
-                                                                              SIDEOFFSET, BACKOFFSET);
+
+    std::vector<BoundingRectangle> polikeaBoundingRectangles = getPolikeaBoundingRectangles(polikeaBuildingPosition,
+                                                                                            FRONTOFFSET,
+                                                                                            SIDEOFFSET, BACKOFFSET);
     std::vector<glm::vec3> positionedLightPos = getPolikeaPositionedLightsPos();
 
     glm::vec3 newCharacterPos;
@@ -413,8 +336,9 @@ protected:
         MOverlay.initMesh(this, &VOverlay);
 
 
+        //Procedural (random) generation of the building + lights
         auto floorplan = generateFloorplan(MAX_DIMENSION);
-        floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors, &boundingRectangles,
+        floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors, &polikeaBoundingRectangles,
                               &positionedLightPos, &roomCenters, &roomOccupiedArea);
         MBuilding.initMesh(this, &VMeshTexID);
 
@@ -797,18 +721,21 @@ protected:
 
         static glm::vec3 oldCharacterPos = newCharacterPos;
         newCharacterPos += MOVE_SPEED * m.x * ux * deltaT;
-        newCharacterPos += MOVE_SPEED * m.z * uz * deltaT;
         if (fly) {
             newCharacterPos += MOVE_SPEED * m.y * glm::vec3(0, 1, 0) * deltaT;
-        } else {
-            if (checkIfInBoundingRectangle(characterPos,getSecondStepBoundingRectangle()))
-                newCharacterPos.y = 0.5f;
-            else if (checkIfInBoundingRectangle(characterPos,getFirstStepBoundingRectangle()))
-                newCharacterPos.y = 0.25f;
-            else
-                newCharacterPos.y = 0.0f;
         }
+        newCharacterPos += MOVE_SPEED * m.z * uz * deltaT;
         characterPos = oldCharacterPos * std::exp(-10 * deltaT) + newCharacterPos * (1 - std::exp(-10 * deltaT));
+
+        //Handle the two steps to enter polikea
+        if(!fly) {
+            if (checkIfInBoundingRectangle(characterPos,getSecondStepBoundingRectangle()))
+                characterPos.y = newCharacterPos.y = 0.5f;
+            else if (checkIfInBoundingRectangle(characterPos,getFirstStepBoundingRectangle()))
+                characterPos.y = newCharacterPos.y = 0.25f;
+            else
+                characterPos.y = newCharacterPos.y = 0.0f;
+        }
 
         // We update the rotation of the character
         float newAngle = characterYaw;
@@ -818,7 +745,7 @@ protected:
         auto diff = shortestAngularDistance(characterYaw, newAngle, dir);
         characterYaw += static_cast<float>(dir) * std::min(deltaT * ROT_SPEED * 4, diff);
 
-        for (auto &boundingRectangle: boundingRectangles)
+        for (auto &boundingRectangle: polikeaBoundingRectangles)
             if (checkIfInBoundingRectangle(characterPos, boundingRectangle))
                 newCharacterPos = characterPos = oldCharacterPos;
 
@@ -1022,7 +949,7 @@ protected:
 
         glm::mat4 World, WorldCharacter, ViewPrj;
         // We check the bounding of the character for surroundings
-        for (const auto &boundingRectangle: boundingRectangles)
+        for (const auto &boundingRectangle: polikeaBoundingRectangles)
             if (checkIfInBoundingRectangle(characterPos, boundingRectangle, 0.15f))
                 newCharacterPos = characterPos = oldCharacterPos;
         // We check the bounding of the character for furniture
@@ -1119,17 +1046,17 @@ protected:
         uboBuilding.mvpMat = ViewPrj * uboBuilding.worldMat;
         DSBuilding.map(currentImage, &uboBuilding, sizeof(uboBuilding), 0);
 
-        bool displayKey = false;
+        bool displayBuyOrMoveOverlay = false;
         for (auto &modelInfo: MV) {
             float distance = glm::distance(characterPos, modelInfo.modelPos);
             if (distance <= threshold) {
-                displayKey = true;
+                displayBuyOrMoveOverlay = true;
                 break;
             }
         }
 
-        uboKey.visible = (OnlyMoveCam && displayKey) ? 1.0f : 0.0f;
-        bool buyOrMoveOverlay = displayKey &&
+        uboMoveOrBuyOverlay.visible = (OnlyMoveCam && displayBuyOrMoveOverlay) ? 1.0f : 0.0f;
+        bool buyOrMoveOverlay = displayBuyOrMoveOverlay &&
                                 checkIfInBoundingRectangle(
                                         characterPos,
                                         BoundingRectangle{
@@ -1138,8 +1065,8 @@ protected:
                                                 glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f,
                                                           polikeaBuildingPosition.z - 20.5f)}
                                 );
-        uboKey.overlayTex = buyOrMoveOverlay ? 1.0f : 0.0f;
-        DSOverlayMoveObject.map(currentImage, &uboKey, sizeof(uboKey), 0);
+        uboMoveOrBuyOverlay.overlayTex = buyOrMoveOverlay ? 1.0f : 0.0f;
+        DSOverlayMoveObject.map(currentImage, &uboMoveOrBuyOverlay, sizeof(uboMoveOrBuyOverlay), 0);
 
         for (int i = 0; i < N_ROOMS; i++)
             uboHouseBindings.roomsArea[i] = roomOccupiedArea[i];

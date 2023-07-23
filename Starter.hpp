@@ -2203,6 +2203,7 @@ void Model<Vert, Instance>::loadModelGLTF(std::string file, bool encoded) {
 
     std::ifstream lightsStream(lightFile);
     std::string line;
+    //LIGHT.JSON
     if(lightsStream.good()) {
         json data = json::parse(lightsStream);
 
