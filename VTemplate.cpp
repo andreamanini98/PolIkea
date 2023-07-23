@@ -1134,18 +1134,18 @@ protected:
 
         bool insideBuilding = isInsideBuilding(characterPos);
 
-        MVCharacter.modelUBO.diffuseLight = insideBuilding ? 0.0f : 1.0f; //TODO
-        MVCharacter.modelUBO.internalLightsFactor = insideBuilding ? 1.0f : 0.0f; //TODO
+        MVCharacter.modelUBO.diffuseLight = insideBuilding ? 0.0f : 1.0f;
+        MVCharacter.modelUBO.internalLightsFactor = insideBuilding ? 1.0f : 0.0f;
         MVCharacter.dsModel.map(currentImage, &MVCharacter.modelUBO, sizeof(MVCharacter.modelUBO), 0);
 
         oldCharacterPos = characterPos;
     }
 
-    bool isInsideBuilding(glm::vec3 characterPos) {
+    bool isInsideBuilding(glm::vec3 pos) {
         for (auto bounding: roomOccupiedArea)
-            if(checkIfInBoundingRectangle(characterPos, bounding))
+            if(checkIfInBoundingRectangle(pos, bounding))
                 return true;
-        return checkIfInBoundingRectangle(characterPos, getPolikeaOccupiedArea());
+        return checkIfInBoundingRectangle(pos, getPolikeaOccupiedArea());
     }
 };
 
