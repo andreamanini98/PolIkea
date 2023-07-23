@@ -4,12 +4,14 @@
 #define N_ROOMS 5
 #define N_POS_LIGHTS 9
 
-layout(std140, set = 2, binding = 0) uniform UniformBufferObject {
+layout(std140, set = 1, binding = 0) uniform UniformBufferObject {
 	float amb;
 	float gamma;
 	vec3 sColor;
 	mat4 prjViewMat;
-    vec4 door[N_ROOMS-1];
+    vec4 offsetRot[N_ROOMS+4];
+	float diffuseLightFactor;
+	float internalLightsFactor;
 } ubo;
 
 layout(location = 0) in vec3 inPosition;
@@ -17,11 +19,12 @@ layout(location = 1) in vec3 inNorm;
 layout(location = 2) in vec2 inUV;
 layout(location = 3) in float instanceRot;
 layout(location = 4) in vec3 shift;
-layout(location = 5) in int instanceType;
 
 layout(location = 0) out vec3 fragPos;
 layout(location = 1) out vec3 fragNorm;
 layout(location = 2) out vec2 outUV;
+layout(location = 3) out float diffuseLightFactor;
+layout(location = 4) out float internalLightsFactor;
 
 mat4 rotationMatrix(vec3 axis, float angle)
 {
@@ -45,10 +48,7 @@ mat4 shiftMatFun(vec3 shift)
 }
 
 void main() {
-	float x = 0.0f;
-	if (instanceType == 0) {
-		x = ubo.door[gl_InstanceIndex].x;
-	}
+	float x = ubo.offsetRot[gl_InstanceIndex].x;
 	mat4 rotation = rotationMatrix(vec3(0.0, 1.0, 0.0), instanceRot + x);
 	vec3 rotatedPosition = (rotation * vec4(inPosition, 1.0)).xyz;
 	vec3 rotatedNormal = (rotation * vec4(inNorm, 0.0)).xyz;
@@ -56,7 +56,8 @@ void main() {
 	gl_Position = ubo.prjViewMat * vec4(rotatedPosition + shift, 1.0);
 	fragPos = (vec4(rotatedPosition + shift, 1.0)).xyz;
 	fragNorm = (vec4(rotatedNormal, 0.0)).xyz;
-	outUV = inUV;
 
 	outUV = inUV;
+	diffuseLightFactor = ubo.offsetRot[gl_InstanceIndex].y;
+	internalLightsFactor = ubo.offsetRot[gl_InstanceIndex].z;
 }

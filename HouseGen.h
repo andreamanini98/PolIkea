@@ -16,11 +16,11 @@
 #define N_ROOMS 5
 #define MIN_DIMENSION (12.5f)
 #define MAX_DIMENSION (18.0f)
-#define DOOR_HWIDTH (0.5f)
-#define WALL_WIDTH (0.1f)
+#define DOOR_HWIDTH (0.521f)
+#define WALL_WIDTH (0.09f)
 
 #define ROOM_CEILING_HEIGHT 3.0f
-#define DOOR_HEIGHT 2.5f
+#define DOOR_HEIGHT 2.416f
 
 // ----- ENUM ----- //
 

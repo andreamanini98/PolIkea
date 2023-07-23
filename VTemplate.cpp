@@ -73,7 +73,7 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors, DSLHouseBindings;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors;
 
     // Vertex formats
     VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced;
@@ -90,14 +90,13 @@ protected:
     Model<VertexWithTextID> MBuilding;
 
     // Descriptor sets
-    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveObject, DSPolikeaBuilding, DSBuilding, DSHouseBindings;
+    DescriptorSet DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveObject, DSPolikeaBuilding, DSBuilding;
     // Textures
     Texture TAsphalt, TFurniture, TFence, TPlankWall, TOverlayMoveObject, TBathFloor, TDarkFloor, TTiledStones, TOverlayBuyObject, TCharacter;
     // C++ storage for uniform variables
     UniformBlock uboPolikeaExternFloor, uboFence, uboPolikea, uboBuilding;
     GlobalUniformBlock gubo;
     OverlayUniformBlock uboMoveOrBuyOverlay;
-    HouseBindings uboHouseBindings;
 
     // Other application parameters
     // A vector containing one element for each model loaded where we want to keep track of its information
@@ -108,7 +107,7 @@ protected:
     glm::vec3 polikeaBuildingPosition = getPolikeaBuildingPosition();
     std::vector<glm::vec3> polikeaBuildingOffsets = getPolikeaBuildingOffsets();
 
-    std::vector<BoundingRectangle> polikeaBoundingRectangles = getPolikeaBoundingRectangles(polikeaBuildingPosition,
+    std::vector<BoundingRectangle> buildingBoundingRectangle = getPolikeaBoundingRectangles(polikeaBuildingPosition,
                                                                                             FRONTOFFSET,
                                                                                             SIDEOFFSET, BACKOFFSET);
     std::vector<glm::vec3> positionedLightPos = getPolikeaPositionedLightsPos();
@@ -128,8 +127,8 @@ protected:
     std::vector<BoundingRectangle> roomOccupiedArea;
 
     Model<Vertex, ModelInstance> MDoor, MPositionedLights;
-    DescriptorSet DSDoor;
-    UniformBlockDoors uboDoor;
+    DescriptorSet DSDoor, DSPositionedLights;
+    UniformBlockInstancedWithRot uboDoor, uboPositionedLights;
 
     std::vector<OpenableDoor> doors;
 
@@ -178,9 +177,6 @@ protected:
                 //                  using the corresponding Vulkan constant
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
-        });
-        DSLHouseBindings.init(this, {
-                {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
         });
         DSLMeshMultiTex.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
@@ -285,9 +281,7 @@ protected:
                                     {1, 3, VK_FORMAT_R32_SFLOAT,       offsetof(ModelInstance,
                                                                                 baseRot),      sizeof(float),     OTHER},
                                     {1, 4, VK_FORMAT_R32G32B32_SFLOAT, offsetof(ModelInstance,
-                                                                                pos),          sizeof(glm::vec3), OTHER},
-                                    {1, 5, VK_FORMAT_R32_SINT,         offsetof(ModelInstance,
-                                                                                instanceType), sizeof(int),       OTHER}
+                                                                                pos),          sizeof(glm::vec3), OTHER}
                             });
 
         // Pipelines [Shader couples]
@@ -295,22 +289,22 @@ protected:
         // Third and fourth parameters are respectively the vertex and fragment shaders
         // The last array, is a vector of pointer to the layouts of the sets that will
         // be used in this pipeline. The first element will be set 0, and so on
-        PMesh.init(this, &VMesh, "shaders/ShaderVert.spv", "shaders/ShaderFrag.spv",
-                   {&DSLGubo, &DSLHouseBindings, &DSLMesh});
+        PMesh.init(this, &VMesh, "shaders_c/Shader.vert.spv", "shaders_c/Shader.frag.spv",
+                   {&DSLGubo, &DSLMesh});
         PMesh.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PMeshMultiTexture.init(this, &VMeshTexID, "shaders/ShaderVertMultiTexture.spv",
-                               "shaders/ShaderFragMultiTexture.spv", {&DSLGubo, &DSLMeshMultiTex});
+        PMeshMultiTexture.init(this, &VMeshTexID, "shaders_c/ShaderMultiTexture.vert.spv",
+                               "shaders_c/ShaderMultiTexture.frag.spv", {&DSLGubo, &DSLMeshMultiTex});
         PMeshMultiTexture.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        POverlay.init(this, &VOverlay, "shaders/OverlayVert.spv", "shaders/OverlayFrag.spv", {&DSLOverlay});
+        POverlay.init(this, &VOverlay, "shaders_c/Overlay.vert.spv", "shaders_c/Overlay.frag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PVertexWithColors.init(this, &VVertexWithColor, "shaders/VColorVert.spv", "shaders/VColorFrag.spv",
+        PVertexWithColors.init(this, &VVertexWithColor, "shaders_c/VColor.vert.spv", "shaders_c/VColor.frag.spv",
                                {&DSLGubo, &DSLVertexWithColors});
 
-        PMeshInstanced.init(this, &VMeshInstanced, "shaders/ShaderInstancedVert.spv", "shaders/ShaderInstancedFrag.spv",
-                            {&DSLGubo, &DSLHouseBindings, &DSLDoor});
+        PMeshInstanced.init(this, &VMeshInstanced, "shaders_c/ShaderInstanced.vert.spv", "shaders_c/ShaderInstanced.frag.spv",
+                            {&DSLGubo, &DSLDoor});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         // Models, textures and Descriptors (values assigned to the uniforms)
@@ -338,7 +332,7 @@ protected:
 
         //Procedural (random) generation of the building + lights
         auto floorplan = generateFloorplan(MAX_DIMENSION);
-        floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors, &polikeaBoundingRectangles,
+        floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors, &buildingBoundingRectangle,
                               &positionedLightPos, &roomCenters, &roomOccupiedArea);
         MBuilding.initMesh(this, &VMeshTexID);
 
@@ -346,7 +340,7 @@ protected:
 
         MDoor.instanceBufferPresent = true;
         MDoor.instances.reserve(doors.size() + 2);
-        // Now we insert 2 more doors for polikea
+        // we insert 2 doors for polikea at the end (the others were generated by the floorplan)
         doors.push_back(
                 OpenableDoor{
                         getPolikeaBuildingPosition() + glm::vec3(3.0, 0.25, -DOOR_HWIDTH / 2),
@@ -368,14 +362,14 @@ protected:
                         CLOCKWISE
                 });
         for (auto &door: doors) {
-            MDoor.instances.push_back({door.baseRot, door.doorPos, 0});
+            MDoor.instances.push_back({door.baseRot, door.doorPos});
         }
         MDoor.init(this, &VMeshInstanced, "models/door_009_Mesh.112.mgcg", MGCG);
 
         MPositionedLights.instanceBufferPresent = true;
         MPositionedLights.instances.reserve(N_POS_LIGHTS);
         for (int i = 0; i < N_POS_LIGHTS; i++) {
-            MPositionedLights.instances.push_back({0.0f, positionedLightPos[i], 1});
+            MPositionedLights.instances.push_back({0.0f, positionedLightPos[i]});
         }
         MPositionedLights.init(this, &VMeshInstanced, "models/lights/polilamp.mgcg", MGCG);
 
@@ -488,9 +482,6 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
                 {1, TEXTURE, 0,                    &TFence}
         });
-        DSHouseBindings.init(this, &DSLHouseBindings, {
-                {0, UNIFORM, sizeof(HouseBindings), nullptr}
-        });
         DSGubo.init(this, &DSLGubo, {
                 {0, UNIFORM, sizeof(GlobalUniformBlock), nullptr}
         });
@@ -503,8 +494,12 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
         DSDoor.init(this, &DSLDoor, {
-                {0, UNIFORM, sizeof(UniformBlockDoors), nullptr},
-                {1, TEXTURE, 0,                         &TFurniture}
+                {0, UNIFORM, sizeof(UniformBlockInstancedWithRot), nullptr},
+                {1, TEXTURE, 0,                                    &TFurniture}
+        });
+        DSPositionedLights.init(this, &DSLDoor, {
+                {0, UNIFORM, sizeof(UniformBlockInstancedWithRot), nullptr},
+                {1, TEXTURE, 0,                                    &TFurniture}
         });
         DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
@@ -545,8 +540,8 @@ protected:
         DSOverlayMoveObject.cleanup();
         DSPolikeaBuilding.cleanup();
         DSDoor.cleanup();
+        DSPositionedLights.cleanup();
         DSBuilding.cleanup();
-        DSHouseBindings.cleanup();
 
         for (auto &mInfo: MV)
             mInfo.dsModel.cleanup();
@@ -589,7 +584,6 @@ protected:
         DSLOverlay.cleanup();
         DSLVertexWithColors.cleanup();
         DSLDoor.cleanup();
-        DSLHouseBindings.cleanup();
 
         // Destroys the pipelines
         PMesh.destroy();
@@ -633,17 +627,16 @@ protected:
         // This is done automatically in file Starter.hpp, however the command here needs also the index
         // of the current image in the swap chain, passed in its last parameter
         DSGubo.bind(commandBuffer, PMesh, 0, currentImage);
-        DSHouseBindings.bind(commandBuffer, PMesh, 1, currentImage);
 
         //--- GRID ---
         // binds the model
         // For a Model object, this command binds the corresponding index and vertex buffer
         // to the command buffer passed in its parameter
-        DSPolikeaExternFloor.bind(commandBuffer, PMesh, 2, currentImage);
+        DSPolikeaExternFloor.bind(commandBuffer, PMesh, 1, currentImage);
         MPolikeaExternFloor.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaExternFloor.indices.size()), 1, 0, 0, 0);
 
-        DSFence.bind(commandBuffer, PMesh, 2, currentImage);
+        DSFence.bind(commandBuffer, PMesh, 1, currentImage);
         MFence.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MFence.indices.size()), 1, 0, 0, 0);
         // the second parameter is the number of indexes to be drawn. For a Model object,
@@ -651,12 +644,12 @@ protected:
 
         //--- MODELS ---
         for (auto &mInfo: MV) {
-            mInfo.dsModel.bind(commandBuffer, PMesh, 2, currentImage);
+            mInfo.dsModel.bind(commandBuffer, PMesh, 1, currentImage);
             mInfo.model.bind(commandBuffer);
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mInfo.model.indices.size()), 1, 0, 0, 0);
         }
 
-        MVCharacter.dsModel.bind(commandBuffer, PMesh, 2, currentImage);
+        MVCharacter.dsModel.bind(commandBuffer, PMesh, 1, currentImage);
         MVCharacter.model.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MVCharacter.model.indices.size()), 1, 0, 0, 0);
 
@@ -676,14 +669,14 @@ protected:
         //--- PIPELINE INSTANCED ---
         PMeshInstanced.bind(commandBuffer);
         DSGubo.bind(commandBuffer, PMeshInstanced, 0, currentImage);
-        DSHouseBindings.bind(commandBuffer, PMeshInstanced, 1, currentImage);
-        DSDoor.bind(commandBuffer, PMeshInstanced, 2, currentImage);
 
+        DSDoor.bind(commandBuffer, PMeshInstanced, 1, currentImage);
         MDoor.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1 + 2, 0, 0, 0);
+
+        DSPositionedLights.bind(commandBuffer, PMeshInstanced, 1, currentImage);
         MPositionedLights.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0,
-                         0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, 0);
     }
 
     // Here is where you update the uniforms.
@@ -745,7 +738,7 @@ protected:
         auto diff = shortestAngularDistance(characterYaw, newAngle, dir);
         characterYaw += static_cast<float>(dir) * std::min(deltaT * ROT_SPEED * 4, diff);
 
-        for (auto &boundingRectangle: polikeaBoundingRectangles)
+        for (auto &boundingRectangle: buildingBoundingRectangle)
             if (checkIfInBoundingRectangle(characterPos, boundingRectangle))
                 newCharacterPos = characterPos = oldCharacterPos;
 
@@ -775,7 +768,7 @@ protected:
         }
 
         if (!OnlyMoveCam) {
-            isLookAt = false; // When we move objects we don't want to see also the character.
+            //isLookAt = false; // When we move objects we don't want to see also the character.
             //Checks to see if an object can be bought
             if (!MV[MoveObjIndex].hasBeenBought) {
                 bool isObjectAllowedToMove = true;
@@ -787,7 +780,7 @@ protected:
                 }
                 OnlyMoveCam = true;
             } else {
-                const glm::vec3 modelPos = glm::vec3(characterPos.x, characterPos.y - 1.0f, characterPos.z - 2.0f);
+                const glm::vec3 modelPos = glm::vec3(characterPos.x, characterPos.y, characterPos.z - 2.0f);
                 glm::vec3 oldPos = MV[MoveObjIndex].modelPos;
                 MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(characterPos, cameraYaw, camPitch, modelPos);
 
@@ -949,7 +942,7 @@ protected:
 
         glm::mat4 World, WorldCharacter, ViewPrj;
         // We check the bounding of the character for surroundings
-        for (const auto &boundingRectangle: polikeaBoundingRectangles)
+        for (const auto &boundingRectangle: buildingBoundingRectangle)
             if (checkIfInBoundingRectangle(characterPos, boundingRectangle, 0.15f))
                 newCharacterPos = characterPos = oldCharacterPos;
         // We check the bounding of the character for furniture
@@ -1035,6 +1028,8 @@ protected:
         uboPolikea.worldMat = glm::translate(glm::mat4(1), polikeaBuildingPosition) * glm::scale(glm::mat4(1), glm::vec3(5.0f));
         uboPolikea.nMat = glm::inverse(uboPolikea.worldMat);
         uboPolikea.mvpMat = ViewPrj * uboPolikea.worldMat;
+        uboPolikea.diffuseLight = 1.0f;
+        uboPolikea.internalLightsFactor = 1.0f;
         DSPolikeaBuilding.map(currentImage, &uboPolikea, sizeof(uboPolikea), 0);
         //END UBO POLIKEA
 
@@ -1044,6 +1039,8 @@ protected:
         uboBuilding.worldMat = glm::mat4(1.0f);
         uboBuilding.nMat = glm::inverse(uboBuilding.worldMat);
         uboBuilding.mvpMat = ViewPrj * uboBuilding.worldMat;
+        uboBuilding.diffuseLight = 0.0f;
+        uboBuilding.internalLightsFactor = 1.0f;
         DSBuilding.map(currentImage, &uboBuilding, sizeof(uboBuilding), 0);
 
         bool displayBuyOrMoveOverlay = false;
@@ -1067,17 +1064,6 @@ protected:
                                 );
         uboMoveOrBuyOverlay.overlayTex = buyOrMoveOverlay ? 1.0f : 0.0f;
         DSOverlayMoveObject.map(currentImage, &uboMoveOrBuyOverlay, sizeof(uboMoveOrBuyOverlay), 0);
-
-        for (int i = 0; i < N_ROOMS; i++)
-            uboHouseBindings.roomsArea[i] = roomOccupiedArea[i];
-        for (int i = 0; i < 4; i++) {
-            uboHouseBindings.externPolikeaBoundings[i] = getPolikeaExternalAreaBoundings(
-                    getPolikeaBuildingPosition(),
-                    FRONTOFFSET,
-                    SIDEOFFSET,
-                    BACKOFFSET)[i];
-        }
-        DSHouseBindings.map(currentImage, &uboHouseBindings, sizeof(uboHouseBindings), 0);
 
         uboPolikeaExternFloor.amb = 0.05f;
         uboPolikeaExternFloor.gamma = 180.0f;
@@ -1103,9 +1089,28 @@ protected:
         uboDoor.gamma = 180.0f;
         uboDoor.sColor = glm::vec3(1.0f);
         uboDoor.prjViewMat = ViewPrj;
-        for (int i = 0; i < N_ROOMS - 1 + 2; i++)
-            uboDoor.door[i] = glm::vec4(doors[i].doorRot);
+        uboDoor.internalLightsFactor = 1.0;
+        uboDoor.diffuseLight = 1.0;
+        //The door in the house receive no light from the outside
+        for (int i = 0; i < N_ROOMS - 1; i++) {
+            uboDoor.rotOffset[i] = glm::vec4(doors[i].doorRot, /*diffuseLight = */ 0.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
+        }
+        //The two polikea doors have the light
+        for (int i = N_ROOMS - 1; i < N_ROOMS - 1 + 2; i++) {
+            uboDoor.rotOffset[i] = glm::vec4(doors[i].doorRot, /*diffuseLight = */ 1.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
+        }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
+
+        uboPositionedLights.amb = 0.05f;
+        uboPositionedLights.gamma = 180.0f;
+        uboPositionedLights.sColor = glm::vec3(1.0f);
+        uboPositionedLights.prjViewMat = ViewPrj;
+        uboPositionedLights.internalLightsFactor = 1.0;
+        uboPositionedLights.diffuseLight = 1.0;
+        for (int i = 0; i < MAXIMUM_INSTANCES_PER_BUFFER; i++) {
+            uboPositionedLights.rotOffset[i] = glm::vec4(/* rot = */ 0.0f, /*diffuseLight = */ 0.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
+        }
+        DSPositionedLights.map(currentImage, &uboPositionedLights, sizeof(uboPositionedLights), 0);
 
         for (auto &mInfo: MV) {
             World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * glm::mat4(1.0f);;
@@ -1115,6 +1120,8 @@ protected:
             mInfo.modelUBO.worldMat = World;
             mInfo.modelUBO.nMat = glm::inverse(mInfo.modelUBO.worldMat);
             mInfo.modelUBO.mvpMat = ViewPrj * mInfo.modelUBO.worldMat;
+            mInfo.modelUBO.diffuseLight = 0.0f;
+            mInfo.modelUBO.internalLightsFactor = 1.0f;
             mInfo.dsModel.map(currentImage, &mInfo.modelUBO, sizeof(mInfo.modelUBO), 0);
         }
 
@@ -1124,12 +1131,26 @@ protected:
         MVCharacter.modelUBO.worldMat = WorldCharacter * glm::scale(glm::mat4(1), (isLookAt) ? glm::vec3(1.5f, 1.8f, 1.5f) : glm::vec3(0.0f));
         MVCharacter.modelUBO.nMat = glm::inverse(MVCharacter.modelUBO.worldMat);
         MVCharacter.modelUBO.mvpMat = ViewPrj * MVCharacter.modelUBO.worldMat;
+
+        bool insideBuilding = isInsideBuilding();
+
+        MVCharacter.modelUBO.diffuseLight = insideBuilding ? 0.0f : 1.0f; //TODO
+        MVCharacter.modelUBO.internalLightsFactor = insideBuilding ? 1.0f : 0.0f; //TODO
         MVCharacter.dsModel.map(currentImage, &MVCharacter.modelUBO, sizeof(MVCharacter.modelUBO), 0);
 
         oldCharacterPos = characterPos;
     }
-};
 
+    bool isInsideBuilding() {
+        for (auto bindings: buildingBoundingRectangle) {
+            if(
+                            characterPos.x >= bindings.bottomLeft.x && characterPos.x <= bindings.topRight.x &&
+                            characterPos.z <= bindings.bottomLeft.z && characterPos.z >= bindings.topRight.z
+            ) return true;
+        }
+        return false;
+    }
+};
 
 // This is the main: probably you do not need to touch this!
 int main() {
