@@ -1142,11 +1142,10 @@ protected:
     }
 
     bool isInsideBuilding(glm::vec3 characterPos) {
-        bool isInside = false;
         for (auto bounding: roomOccupiedArea)
-            isInside = isInside || checkIfInBoundingRectangle(characterPos, bounding);
-        isInside = isInside || checkIfInBoundingRectangle(characterPos, getPolikeaOccupiedArea());
-        return isInside;
+            if(checkIfInBoundingRectangle(characterPos, bounding))
+                return true;
+        return checkIfInBoundingRectangle(characterPos, getPolikeaOccupiedArea());
     }
 };
 
