@@ -1132,7 +1132,7 @@ protected:
         MVCharacter.modelUBO.nMat = glm::inverse(MVCharacter.modelUBO.worldMat);
         MVCharacter.modelUBO.mvpMat = ViewPrj * MVCharacter.modelUBO.worldMat;
 
-        bool insideBuilding = isInsideBuilding();
+        bool insideBuilding = isInsideBuilding(characterPos);
 
         MVCharacter.modelUBO.diffuseLight = insideBuilding ? 0.0f : 1.0f; //TODO
         MVCharacter.modelUBO.internalLightsFactor = insideBuilding ? 1.0f : 0.0f; //TODO
@@ -1141,14 +1141,12 @@ protected:
         oldCharacterPos = characterPos;
     }
 
-    bool isInsideBuilding() {
-        for (auto bindings: buildingBoundingRectangle) {
-            if(
-                            characterPos.x >= bindings.bottomLeft.x && characterPos.x <= bindings.topRight.x &&
-                            characterPos.z <= bindings.bottomLeft.z && characterPos.z >= bindings.topRight.z
-            ) return true;
-        }
-        return false;
+    bool isInsideBuilding(glm::vec3 characterPos) {
+        bool isInside = false;
+        for (auto bounding: roomOccupiedArea)
+            isInside = isInside || checkIfInBoundingRectangle(characterPos, bounding);
+        isInside = isInside || checkIfInBoundingRectangle(characterPos, getPolikeaOccupiedArea());
+        return isInside;
     }
 };
 

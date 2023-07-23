@@ -154,3 +154,8 @@ BoundingRectangle getFirstStepBoundingRectangle() {
             glm::vec3(getPolikeaBuildingPosition().x - 10.0f, 0.0f, getPolikeaBuildingPosition().z),
             glm::vec3(getPolikeaBuildingPosition().x + 10.0f, 0.0f,getPolikeaBuildingPosition().z - 1.0f)};
 }
+
+BoundingRectangle getPolikeaOccupiedArea() {
+    return BoundingRectangle{glm::vec3(getPolikeaBuildingPosition().x - 10.0f, 0.0f, getPolikeaBuildingPosition().z),
+                             glm::vec3(getPolikeaBuildingPosition().x + 10.0f, 0.0f, getPolikeaBuildingPosition().z - 20.0f)};
+}
