@@ -947,7 +947,7 @@ protected:
                 newCharacterPos = characterPos = oldCharacterPos;
         // We check the bounding of the character for furniture
         for (const auto &modelInfo: MV) {
-            if (MVCharacter.checkCollision(modelInfo) && !hDebounce) {
+            if (MVCharacter.checkCollision(modelInfo) && !(hDebounce || roomCyclingDebounce)) {
                 newCharacterPos = characterPos = oldCharacterPos;
                 break;
             }
