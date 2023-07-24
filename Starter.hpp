@@ -4,7 +4,7 @@
 // Decrypted models
 // Light parameters
 // Instance rendering
-// Dynamic texture
+// MultiTexture
 
 #include <iostream>
 #include <stdexcept>
@@ -309,7 +309,7 @@ struct DescriptorSetLayoutBinding {
 	uint32_t binding;
 	VkDescriptorType type;
 	VkShaderStageFlags flags;
-	// Dynamic texture
+	// MultiTexture
     uint32_t count = 1;
 };
 
@@ -358,7 +358,7 @@ struct DescriptorSetElement {
 	DescriptorSetElementType type;
 	int size;
 	Texture *tex;
-	// Dynamic texture
+	// MultiTexture
     int texDstArrayElement = 0;
 };
 
@@ -507,7 +507,6 @@ protected:
     	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     	appInfo.pEngineName = "No Engine";
     	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		// Dynamic texture
 		appInfo.apiVersion = VK_API_VERSION_1_2;
 
 		VkInstanceCreateInfo createInfo{};
@@ -518,12 +517,6 @@ protected:
 		const char** glfwExtensions;
 		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-		// Dynamic texture
-        #if defined(VK_USE_PLATFORM_MACOS_MVK)
-                // SRS - on macOS set environment variable to configure MoltenVK for using Metal argument buffers (needed for descriptor indexing)
-                //     - MoltenVK supports Metal argument buffers on macOS, iOS possible in future (see https://github.com/KhronosGroup/MoltenVK/issues/1651)
-                setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
-        #endif
 
 //		createInfo.enabledExtensionCount = glfwExtensionCount;
 //		createInfo.ppEnabledExtensionNames = glfwExtensions;
@@ -574,24 +567,6 @@ protected:
 		if(checkIfItHasExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)) {
 			extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 		}
-
-		// Dynamic texture
-		// VK_KHR_maintenance3 adds a collection of minor features that were intentionally left out or overlooked from the original Vulkan 1.0 release.
-		// The new features are as follows:
-		// - A limit on the maximum number of descriptors that are supported in a single descriptor set layout.
-		//   Some implementations have a limit on the total size of descriptors in a set, which cannot be expressed in terms of the limits in Vulkan 1.0.
-		// - A limit on the maximum size of a single memory allocation. Some platforms have kernel interfaces that limit the maximum size of an allocation.
-        if(checkIfItHasExtension(VK_KHR_MAINTENANCE3_EXTENSION_NAME)) {
-            extensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
-        }
-
-		// Dynamic texture
-		// This extension adds several small features which together enable applications to create large descriptor sets
-		// containing substantially all of their resources, and selecting amongst those resources with dynamic (non-uniform)
-		// indexes in the shader. There are feature enables and SPIR-V capabilities for non-uniform descriptor indexing in the shader
-        if(checkIfItHasExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME)) {
-            extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
-        }
 
 		return extensions;
 	}
@@ -744,9 +719,6 @@ protected:
 			if(checkIfItHasDeviceExtension(device, "VK_KHR_portability_subset")) {
 				deviceExtensions.push_back("VK_KHR_portability_subset");
 			}
-
-			// Dynamic texture
-            deviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 
 			bool suitable = isDeviceSuitable(device, devRep);
 			if (suitable) {
@@ -909,11 +881,6 @@ protected:
 		VkPhysicalDeviceFeatures deviceFeatures{};
 		deviceFeatures.samplerAnisotropy = VK_TRUE;
 		deviceFeatures.sampleRateShading = VK_TRUE;
-		// Dynamic texture
-		// Specifies whether all the “storage image extended formats” below are supported (see online documentation for formats).
-        deviceFeatures.shaderStorageImageExtendedFormats = VK_TRUE;
-		// Specifies whether arrays of samplers or sampled images can be indexed by dynamically uniform integer expressions in shader code.
-        deviceFeatures.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
 
         VkDeviceCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -931,20 +898,7 @@ protected:
 					static_cast<uint32_t>(validationLayers.size());
 			createInfo.ppEnabledLayerNames = validationLayers.data();
 
-		// Dynamic texture
-        VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures{};
-		// Indicates the structure type.
-        physicalDeviceDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
-		// Indicates whether arrays of samplers or sampled images can be indexed by non-uniform integer expressions in shader code.
-        physicalDeviceDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-		// Indicates whether the implementation supports the SPIR-V RuntimeDescriptorArray capability (Uses arrays of resources which are sized at run-time).
-        physicalDeviceDescriptorIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
-		// Indicates whether the implementation supports descriptor sets with a variable-sized last binding.
-        physicalDeviceDescriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
-		// Is NULL or a pointer to a structure extending this structure.
-        physicalDeviceDescriptorIndexingFeatures.pNext = nullptr;
-
-        createInfo.pNext = &physicalDeviceDescriptorIndexingFeatures;
+        createInfo.pNext = nullptr;
 
 		VkResult result = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
 
@@ -1595,11 +1549,6 @@ protected:
 		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());;
 		poolInfo.pPoolSizes = poolSizes.data();
 		poolInfo.maxSets = static_cast<uint32_t>(setsInPool * swapChainImages.size());
-		// Dynamic texture
-        //TODO #if defined(VK_USE_PLATFORM_MACOS_MVK)
-                // SRS - increase the per-stage descriptor samplers limit on macOS (maxPerStageDescriptorUpdateAfterBindSamplers > maxPerStageDescriptorSamplers)
-            poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
-        //#endif
 
 		VkResult result = vkCreateDescriptorPool(device, &poolInfo, nullptr,
 									&descriptorPool);
@@ -2951,42 +2900,17 @@ void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutB
 	for(int i = 0; i < B.size(); i++) {
 		bindings[i].binding = B[i].binding;
 		bindings[i].descriptorType = B[i].type;
-		// Dynamic texture
+		// MultiTexture
 		// Now we have to use the count variable previously introduced.
 		bindings[i].descriptorCount = B[i].count;
 		bindings[i].stageFlags = B[i].flags;
 		bindings[i].pImmutableSamplers = nullptr;
-
-        /*if(B[i].type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER && B[i].count > 1) {
-            printf("!!!!!!!!!!!!!!!!BEFORE IT WAS %d\n", B[i].count);
-
-            descriptorBindingFlags.push_back(VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT);
-            POIFlag = true;
-        } else {
-            descriptorBindingFlags.push_back(0);
-        }*/
 	}
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());;
 	layoutInfo.pBindings = bindings.data();
-
-    /*if(POIFlag) {
-        // [POI] The fragment shader will be using an unsized array of samplers, which has to be marked with the VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT
-        // In the fragment shader:
-        //	layout (set = 0, binding = 1) uniform sampler2D textures[];
-        VkDescriptorSetLayoutBindingFlagsCreateInfoEXT setLayoutBindingFlags{};
-        setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
-        setLayoutBindingFlags.bindingCount = B.size();
-        setLayoutBindingFlags.pBindingFlags = descriptorBindingFlags.data();
-
-        //TODO #if defined(VK_USE_PLATFORM_MACOS_MVK)
-        // SRS - increase the per-stage descriptor samplers limit on macOS (maxPerStageDescriptorUpdateAfterBindSamplers > maxPerStageDescriptorSamplers)
-        layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-        //#endif
-        layoutInfo.pNext = &setLayoutBindingFlags;
-    }*/
 
 	VkResult result = vkCreateDescriptorSetLayout(BP->device, &layoutInfo, nullptr, &descriptorSetLayout);
 	if (result != VK_SUCCESS) {
@@ -3085,7 +3009,7 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 				descriptorWrites[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[j].dstSet = descriptorSets[i];
 				descriptorWrites[j].dstBinding = E[j].binding;
-				// Dynamic texture
+				// MultiTexture
 				// Now we have to use the new variable previously introduced.
 				descriptorWrites[j].dstArrayElement = E[j].texDstArrayElement;
 				descriptorWrites[j].descriptorType =

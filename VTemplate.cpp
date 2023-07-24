@@ -180,19 +180,18 @@ protected:
         });
         DSLMeshMultiTex.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
-                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 5},
+                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 5}
         });
         DSLInstance.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
-                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
         });
         DSLGubo.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT}
         });
         DSLOverlay.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
-                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
-                {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 2}
         });
         DSLVertexWithColors.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS}
@@ -487,8 +486,8 @@ protected:
         });
         DSOverlayMoveObject.init(this, &DSLOverlay, {
                 {0, UNIFORM, sizeof(OverlayUniformBlock), nullptr},
-                {1, TEXTURE, 0,                           &TOverlayMoveObject},
-                {2, TEXTURE, 0,                           &TOverlayBuyObject}
+                {1, TEXTURE, 0,                           &TOverlayMoveObject, 0},
+                {1, TEXTURE, 0,                           &TOverlayBuyObject, 1}
         });
         DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
