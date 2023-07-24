@@ -62,7 +62,7 @@ struct UniformBlock {
 // Door requires (N_ROOMS - 1) + 2 instances
 // Lights require N_ROOMS + 4 instances
 // We take the max
-#define MAXIMUM_INSTANCES_PER_BUFFER (N_ROOMS + 4)
+#define MAXIMUM_INSTANCES_PER_BUFFER (N_ROOMS + 4 + (N_ROOMS - 1) + 2)
 
 struct UniformBlockInstance {
     alignas(4) float amb;

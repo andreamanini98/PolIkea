@@ -127,8 +127,8 @@ protected:
     std::vector<BoundingRectangle> roomOccupiedArea;
 
     Model<Vertex, ModelInstance> MDoor, MPositionedLights;
-    DescriptorSet DSDoor, DSPositionedLights;
-    UniformBlockInstance uboDoor, uboPositionedLights;
+    DescriptorSet DSDoor;
+    UniformBlockInstance uboDoor;
 
     std::vector<OpenableDoor> doors;
 
@@ -329,7 +329,6 @@ protected:
         MOverlay.indices = {0, 1, 2, 3, 2, 1};
         MOverlay.initMesh(this, &VOverlay);
 
-
         //Procedural (random) generation of the building + lights
         auto floorplan = generateFloorplan(MAX_DIMENSION);
         floorPlanToVerIndexes(floorplan, MBuilding.vertices, MBuilding.indices, doors, &buildingBoundingRectangle,
@@ -497,10 +496,10 @@ protected:
                 {0, UNIFORM, sizeof(UniformBlockInstance), nullptr},
                 {1, TEXTURE, 0,                            &TFurniture}
         });
-        DSPositionedLights.init(this, &DSLInstance, {
-                {0, UNIFORM, sizeof(UniformBlockInstance), nullptr},
-                {1, TEXTURE, 0,                            &TFurniture}
-        });
+        //DSPositionedLights.init(this, &DSLInstance, {
+        //        {0, UNIFORM, sizeof(UniformBlockInstance), nullptr},
+        //        {1, TEXTURE, 0,                            &TFurniture}
+        //});
         DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
                 {1, TEXTURE, 0,                    &TPlankWall,   0},
@@ -540,7 +539,7 @@ protected:
         DSOverlayMoveObject.cleanup();
         DSPolikeaBuilding.cleanup();
         DSDoor.cleanup();
-        DSPositionedLights.cleanup();
+        //DSPositionedLights.cleanup();
         DSBuilding.cleanup();
 
         for (auto &mInfo: MV)
@@ -674,9 +673,9 @@ protected:
         MDoor.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MDoor.indices.size()), N_ROOMS - 1 + 2, 0, 0, 0);
 
-        DSPositionedLights.bind(commandBuffer, PMeshInstanced, 1, currentImage);
+        //DSPositionedLights.bind(commandBuffer, PMeshInstanced, 1, currentImage);
         MPositionedLights.bind(commandBuffer);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPositionedLights.indices.size()), N_POS_LIGHTS, 0, 0, N_ROOMS - 1 + 2);
     }
 
     // Here is where you update the uniforms.
@@ -1091,26 +1090,33 @@ protected:
         uboDoor.prjViewMat = ViewPrj;
         uboDoor.internalLightsFactor = 1.0;
         uboDoor.diffuseLight = 1.0;
+        int i = 0;
         //The door in the house receive no light from the outside
-        for (int i = 0; i < N_ROOMS - 1; i++) {
+        for (; i < N_ROOMS - 1; i++) {
             uboDoor.rotOffset[i] = glm::vec4(doors[i].doorRot, /*diffuseLight = */ 0.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
+            //counter++;
         }
         //The two polikea doors have the light
-        for (int i = N_ROOMS - 1; i < N_ROOMS - 1 + 2; i++) {
+        for (; i < N_ROOMS - 1 + 2; i++) {
             uboDoor.rotOffset[i] = glm::vec4(doors[i].doorRot, /*diffuseLight = */ 1.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
+            //counter++;
+        }
+        for (; i < MAXIMUM_INSTANCES_PER_BUFFER; i++) {
+            uboDoor.rotOffset[i] = glm::vec4(/* rot = */ 0.0f, /*diffuseLight = */ 0.0f, /* internalLightsFactor = */1.0f, /*unused = */ 1);
+            //counter++;
         }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
 
-        uboPositionedLights.amb = 0.05f;
-        uboPositionedLights.gamma = 180.0f;
-        uboPositionedLights.sColor = glm::vec3(1.0f);
-        uboPositionedLights.prjViewMat = ViewPrj;
-        uboPositionedLights.internalLightsFactor = 1.0;
-        uboPositionedLights.diffuseLight = 1.0;
-        for (int i = 0; i < MAXIMUM_INSTANCES_PER_BUFFER; i++) {
-            uboPositionedLights.rotOffset[i] = glm::vec4(/* rot = */ 0.0f, /*diffuseLight = */ 0.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
-        }
-        DSPositionedLights.map(currentImage, &uboPositionedLights, sizeof(uboPositionedLights), 0);
+        //uboPositionedLights.amb = 0.05f;
+        //uboPositionedLights.gamma = 180.0f;
+        //uboPositionedLights.sColor = glm::vec3(1.0f);
+        //uboPositionedLights.prjViewMat = ViewPrj;
+        //uboPositionedLights.internalLightsFactor = 1.0;
+        //uboPositionedLights.diffuseLight = 1.0;
+        //for (int i = 0; i < MAXIMUM_INSTANCES_PER_BUFFER; i++) {
+        //    uboPositionedLights.rotOffset[i] = glm::vec4(/* rot = */ 0.0f, /*diffuseLight = */ 0.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
+        //}
+        //DSPositionedLights.map(currentImage, &uboPositionedLights, sizeof(uboPositionedLights), 0);
 
         for (auto &mInfo: MV) {
             World = MakeWorldMatrix(mInfo.modelPos, mInfo.modelRot, glm::vec3(1.0f, 1.0f, 1.0f)) * glm::mat4(1.0f);;

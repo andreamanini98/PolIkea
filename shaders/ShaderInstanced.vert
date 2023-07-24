@@ -9,7 +9,7 @@ layout(std140, set = 1, binding = 0) uniform UniformBufferObject {
 	float gamma;
 	vec3 sColor;
 	mat4 prjViewMat;
-    vec4 offsetRot[N_ROOMS+4];
+    vec4 offsetRot[N_ROOMS + 4 + (N_ROOMS - 1) + 2];
 	float diffuseLightFactor;
 	float internalLightsFactor;
 } ubo;
