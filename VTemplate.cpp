@@ -73,7 +73,7 @@ protected:
     float Ar;
 
     // Descriptor Layouts ["classes" of what will be passed to the shaders]
-    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLDoor, DSLGubo, DSLOverlay, DSLVertexWithColors;
+    DescriptorSetLayout DSLMesh, DSLMeshMultiTex, DSLInstance, DSLGubo, DSLOverlay, DSLVertexWithColors;
 
     // Vertex formats
     VertexDescriptor VMesh, VMeshTexID, VOverlay, VVertexWithColor, VMeshInstanced;
@@ -128,7 +128,7 @@ protected:
 
     Model<Vertex, ModelInstance> MDoor, MPositionedLights;
     DescriptorSet DSDoor, DSPositionedLights;
-    UniformBlockInstancedWithRot uboDoor, uboPositionedLights;
+    UniformBlockInstance uboDoor, uboPositionedLights;
 
     std::vector<OpenableDoor> doors;
 
@@ -182,7 +182,7 @@ protected:
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 5},
         });
-        DSLDoor.init(this, {
+        DSLInstance.init(this, {
                 {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_ALL_GRAPHICS},
                 {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
         });
@@ -304,7 +304,7 @@ protected:
                                {&DSLGubo, &DSLVertexWithColors});
 
         PMeshInstanced.init(this, &VMeshInstanced, "shaders_c/ShaderInstanced.vert.spv", "shaders_c/ShaderInstanced.frag.spv",
-                            {&DSLGubo, &DSLDoor});
+                            {&DSLGubo, &DSLInstance});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         // Models, textures and Descriptors (values assigned to the uniforms)
@@ -493,13 +493,13 @@ protected:
         DSPolikeaBuilding.init(this, &DSLVertexWithColors, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr}
         });
-        DSDoor.init(this, &DSLDoor, {
-                {0, UNIFORM, sizeof(UniformBlockInstancedWithRot), nullptr},
-                {1, TEXTURE, 0,                                    &TFurniture}
+        DSDoor.init(this, &DSLInstance, {
+                {0, UNIFORM, sizeof(UniformBlockInstance), nullptr},
+                {1, TEXTURE, 0,                            &TFurniture}
         });
-        DSPositionedLights.init(this, &DSLDoor, {
-                {0, UNIFORM, sizeof(UniformBlockInstancedWithRot), nullptr},
-                {1, TEXTURE, 0,                                    &TFurniture}
+        DSPositionedLights.init(this, &DSLInstance, {
+                {0, UNIFORM, sizeof(UniformBlockInstance), nullptr},
+                {1, TEXTURE, 0,                            &TFurniture}
         });
         DSBuilding.init(this, &DSLMeshMultiTex, {
                 {0, UNIFORM, sizeof(UniformBlock), nullptr},
@@ -583,7 +583,7 @@ protected:
         DSLGubo.cleanup();
         DSLOverlay.cleanup();
         DSLVertexWithColors.cleanup();
-        DSLDoor.cleanup();
+        DSLInstance.cleanup();
 
         // Destroys the pipelines
         PMesh.destroy();

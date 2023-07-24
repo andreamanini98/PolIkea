@@ -64,7 +64,7 @@ struct UniformBlock {
 // We take the max
 #define MAXIMUM_INSTANCES_PER_BUFFER (N_ROOMS + 4)
 
-struct UniformBlockInstancedWithRot {
+struct UniformBlockInstance {
     alignas(4) float amb;
     alignas(4) float gamma;
     alignas(16) glm::vec3 sColor;
