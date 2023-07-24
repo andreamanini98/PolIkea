@@ -1129,7 +1129,7 @@ protected:
         MVCharacter.modelUBO.gamma = 180.0f;
         MVCharacter.modelUBO.sColor = glm::vec3(1.0f);
         MVCharacter.modelUBO.worldMat = WorldCharacter * glm::scale(glm::mat4(1), (isLookAt) ? glm::vec3(1.5f, 1.8f, 1.5f) : glm::vec3(0.0f));
-        MVCharacter.modelUBO.nMat = glm::inverse(MVCharacter.modelUBO.worldMat);
+        MVCharacter.modelUBO.nMat = glm::inverse(glm::transpose(MVCharacter.modelUBO.worldMat));
         MVCharacter.modelUBO.mvpMat = ViewPrj * MVCharacter.modelUBO.worldMat;
 
         bool insideBuilding = isInsideBuilding(characterPos);
