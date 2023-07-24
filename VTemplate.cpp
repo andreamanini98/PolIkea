@@ -1129,23 +1129,23 @@ protected:
         MVCharacter.modelUBO.gamma = 180.0f;
         MVCharacter.modelUBO.sColor = glm::vec3(1.0f);
         MVCharacter.modelUBO.worldMat = WorldCharacter * glm::scale(glm::mat4(1), (isLookAt) ? glm::vec3(1.5f, 1.8f, 1.5f) : glm::vec3(0.0f));
-        MVCharacter.modelUBO.nMat = glm::inverse(MVCharacter.modelUBO.worldMat);
+        MVCharacter.modelUBO.nMat = glm::inverse(glm::transpose(MVCharacter.modelUBO.worldMat));
         MVCharacter.modelUBO.mvpMat = ViewPrj * MVCharacter.modelUBO.worldMat;
 
         bool insideBuilding = isInsideBuilding(characterPos);
 
-        MVCharacter.modelUBO.diffuseLight = insideBuilding ? 0.0f : 1.0f; //TODO
-        MVCharacter.modelUBO.internalLightsFactor = insideBuilding ? 1.0f : 0.0f; //TODO
+        MVCharacter.modelUBO.diffuseLight = insideBuilding ? 0.0f : 1.0f;
+        MVCharacter.modelUBO.internalLightsFactor = insideBuilding ? 1.0f : 0.0f;
         MVCharacter.dsModel.map(currentImage, &MVCharacter.modelUBO, sizeof(MVCharacter.modelUBO), 0);
 
         oldCharacterPos = characterPos;
     }
 
-    bool isInsideBuilding(glm::vec3 characterPos) {
+    bool isInsideBuilding(glm::vec3 pos) {
         for (auto bounding: roomOccupiedArea)
-            if(checkIfInBoundingRectangle(characterPos, bounding))
+            if(checkIfInBoundingRectangle(pos, bounding))
                 return true;
-        return checkIfInBoundingRectangle(characterPos, getPolikeaOccupiedArea());
+        return checkIfInBoundingRectangle(pos, getPolikeaOccupiedArea());
     }
 };
 
