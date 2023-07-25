@@ -226,12 +226,12 @@ struct SpotLightParameters {
     float beta;
     float cosout;
     float cosin;
+    glm::vec3 direction;
 };
 enum LightType { POINT, SPOT };
 
 struct LightParameters {
     glm::vec3 position;
-    glm::vec3 direction;
     glm::vec3 lightColor;
     LightType type;
     union {
@@ -2161,7 +2161,6 @@ void Model<Vert, Instance>::loadModelGLTF(std::string file, bool encoded) {
 
             LightParameters parameters{};
             parameters.position = glm::vec3(element["x"], element["y"], element["z"]);
-            parameters.direction = glm::vec3(element["dir_x"], element["dir_y"], element["dir_z"]);
 
             if(element.contains("light_x")) {
                 parameters.lightColor = glm::vec3(element["light_x"], element["light_y"], element["light_z"]);
@@ -2172,7 +2171,7 @@ void Model<Vert, Instance>::loadModelGLTF(std::string file, bool encoded) {
             if(element.contains("spot")) {
                 auto spot = element["spot"];
                 parameters.type = LightType::SPOT;
-                parameters.parameters.spot = SpotLightParameters { spot["g"], spot["beta"], spot["cosout"], spot["cosin"] };
+                parameters.parameters.spot = SpotLightParameters { spot["g"], spot["beta"], spot["cosout"], spot["cosin"], glm::vec3(spot["dir_x"], spot["dir_y"], spot["dir_z"]) };
             } else if(element.contains("point")) {
                 auto point = element["point"];
                 parameters.type = LightType::POINT;

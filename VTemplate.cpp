@@ -969,7 +969,7 @@ protected:
                     gubo.spotLights[indexSpot].lightPos = glm::vec3(glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
                             glm::vec4(light.position, 1.0f)) + modelInfo.modelPos;
                     gubo.spotLights[indexSpot].lightDir = glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
-                            glm::vec4(light.direction, 1.0f);
+                            glm::vec4(light.parameters.spot.direction, 1.0f);
                     gubo.spotLights[indexSpot].lightColor = glm::vec4(light.lightColor, 1.0f);
                     indexSpot++;
                 } else if (light.type == POINT) {

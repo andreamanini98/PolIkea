@@ -3,28 +3,34 @@
     "x": 0,
     "y": 0.515123,
     "z": 0.000001,
-    "dir_x": 0,
-    "dir_y": 1,
-    "dir_z": 0,
+    "light_x": 0.8,
+    "light_y": 0.8,
+    "light_z": 0.8,
     "spot": {
         "beta": 0.5,
         "g": 2,
         "cosout": 0.55,
-        "cosin": 0.95
+        "cosin": 0.95,
+        "dir_x": 0,
+        "dir_y": 1,
+        "dir_z": 0
     }
 },
 {
     "x": 0,
     "y": 0.515123,
     "z": 0.000001,
-    "dir_x": 0,
-    "dir_y": -1,
-    "dir_z": 0,
+    "light_x": 0.6,
+    "light_y": 0.6,
+    "light_z": 0.6,
     "spot": {
         "beta": 2.5,
         "g": 2,
         "cosout": 0.55,
-        "cosin": 0.95
+        "cosin": 0.95,
+        "dir_x": 0,
+        "dir_y": -1,
+        "dir_z": 0
     }
 }
 ]
