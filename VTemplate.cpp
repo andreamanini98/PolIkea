@@ -149,10 +149,9 @@ protected:
         initialBackgroundColor = {0.4f, 1.0f, 1.0f, 1.0f};
 
         // Descriptor pool sizes
-        // TODO resize to match the actual descriptors used in the code
-        uniformBlocksInPool = 100;
-        texturesInPool = 100;
-        setsInPool = 500;
+        uniformBlocksInPool = 24; // 15 * furniture + 1 * (DScharacter, DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveObject, DSPolikeaBuilding, DSBuilding, DSDoor, DSPositionedLights)
+        texturesInPool = 27;      // 15 * furniture + 1 * (DSPolikeaExternFloor, DSFence, DSDoor, DSPositionedLights, DSCharacter) + 2 * DSOverlayMoveObject + 5 * DSBuilding
+        setsInPool = 24;          // 15 * furniture + 1 * (DSCharacter, DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveObject, DSPolikeaBuilding, DSBuilding, DSDoor, DSPositionedLights)
 
         Ar = (float) windowWidth / (float) windowHeight;
     }
