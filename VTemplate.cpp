@@ -107,9 +107,7 @@ protected:
     glm::vec3 polikeaBuildingPosition = getPolikeaBuildingPosition();
     std::vector<glm::vec3> polikeaBuildingOffsets = getPolikeaBuildingOffsets();
 
-    std::vector<BoundingRectangle> buildingBoundingRectangle = getPolikeaBoundingRectangles(polikeaBuildingPosition,
-                                                                                            FRONTOFFSET,
-                                                                                            SIDEOFFSET, BACKOFFSET);
+    std::vector<BoundingRectangle> buildingBoundingRectangle = getPolikeaBoundingRectangles(polikeaBuildingPosition,FRONTOFFSET,SIDEOFFSET, BACKOFFSET);
     std::vector<glm::vec3> positionedLightPos = getPolikeaPositionedLightsPos();
 
     glm::vec3 newCharacterPos;
@@ -151,10 +149,9 @@ protected:
         initialBackgroundColor = {0.4f, 1.0f, 1.0f, 1.0f};
 
         // Descriptor pool sizes
-        // TODO resize to match the actual descriptors used in the code
-        uniformBlocksInPool = 100;
-        texturesInPool = 100;
-        setsInPool = 500;
+        uniformBlocksInPool = 24; // 15 * furniture + 1 * (DScharacter, DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveObject, DSPolikeaBuilding, DSBuilding, DSDoor, DSPositionedLights)
+        texturesInPool = 27;      // 15 * furniture + 1 * (DSPolikeaExternFloor, DSFence, DSDoor, DSPositionedLights, DSCharacter) + 2 * DSOverlayMoveObject + 5 * DSBuilding
+        setsInPool = 24;          // 15 * furniture + 1 * (DSCharacter, DSPolikeaExternFloor, DSFence, DSGubo, DSOverlayMoveObject, DSPolikeaBuilding, DSBuilding, DSDoor, DSPositionedLights)
 
         Ar = (float) windowWidth / (float) windowHeight;
     }
@@ -288,22 +285,18 @@ protected:
         // Third and fourth parameters are respectively the vertex and fragment shaders
         // The last array, is a vector of pointer to the layouts of the sets that will
         // be used in this pipeline. The first element will be set 0, and so on
-        PMesh.init(this, &VMesh, "shaders_c/Shader.vert.spv", "shaders_c/Shader.frag.spv",
-                   {&DSLGubo, &DSLMesh});
+        PMesh.init(this, &VMesh, "shaders_c/Shader.vert.spv", "shaders_c/Shader.frag.spv",{&DSLGubo, &DSLMesh});
         PMesh.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PMeshMultiTexture.init(this, &VMeshTexID, "shaders_c/ShaderMultiTexture.vert.spv",
-                               "shaders_c/ShaderMultiTexture.frag.spv", {&DSLGubo, &DSLMeshMultiTex});
+        PMeshMultiTexture.init(this, &VMeshTexID, "shaders_c/ShaderMultiTexture.vert.spv","shaders_c/ShaderMultiTexture.frag.spv", {&DSLGubo, &DSLMeshMultiTex});
         PMeshMultiTexture.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         POverlay.init(this, &VOverlay, "shaders_c/Overlay.vert.spv", "shaders_c/Overlay.frag.spv", {&DSLOverlay});
         POverlay.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
-        PVertexWithColors.init(this, &VVertexWithColor, "shaders_c/VColor.vert.spv", "shaders_c/VColor.frag.spv",
-                               {&DSLGubo, &DSLVertexWithColors});
+        PVertexWithColors.init(this, &VVertexWithColor, "shaders_c/VColor.vert.spv", "shaders_c/VColor.frag.spv",{&DSLGubo, &DSLVertexWithColors});
 
-        PMeshInstanced.init(this, &VMeshInstanced, "shaders_c/ShaderInstanced.vert.spv", "shaders_c/ShaderInstanced.frag.spv",
-                            {&DSLGubo, &DSLInstance});
+        PMeshInstanced.init(this, &VMeshInstanced, "shaders_c/ShaderInstanced.vert.spv", "shaders_c/ShaderInstanced.frag.spv",{&DSLGubo, &DSLInstance});
         PMeshInstanced.setAdvancedFeatures(VK_COMPARE_OP_LESS, VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, false);
 
         // Models, textures and Descriptors (values assigned to the uniforms)
@@ -313,11 +306,8 @@ protected:
         MVCharacter = loadCharacter("models/character/character.obj", this, &VMesh, OBJ);
 
         // Creates a mesh with direct enumeration of vertices and indices
-        initPolikeaSurroundings(&MPolikeaExternFloor.vertices,
-                                &MPolikeaExternFloor.indices,
-                                &MFence.vertices,
-                                &MFence.indices,
-                                getPolikeaBuildingPosition(), FRONTOFFSET, SIDEOFFSET, BACKOFFSET);
+        initPolikeaSurroundings(&MPolikeaExternFloor.vertices,&MPolikeaExternFloor.indices,&MFence.vertices,
+                                &MFence.indices,getPolikeaBuildingPosition(), FRONTOFFSET, SIDEOFFSET, BACKOFFSET);
         MPolikeaExternFloor.initMesh(this, &VMesh);
         MFence.initMesh(this, &VMesh);
 
@@ -327,7 +317,6 @@ protected:
                              {{0.7f,  0.93f}, {1.0f, 1.0f}}};
         MOverlay.indices = {0, 1, 2, 3, 2, 1};
         MOverlay.initMesh(this, &VOverlay);
-
 
         //Procedural (random) generation of the building + lights
         auto floorplan = generateFloorplan(MAX_DIMENSION);
@@ -342,7 +331,7 @@ protected:
         // we insert 2 doors for polikea at the end (the others were generated by the floorplan)
         doors.push_back(
                 OpenableDoor{
-                        getPolikeaBuildingPosition() + glm::vec3(3.0, 0.25, -DOOR_HWIDTH / 2),
+                        getPolikeaBuildingPosition() + glm::vec3(3.0f, 0.25f, -DOOR_HWIDTH / 2),
                         glm::radians(0.0f),
                         0.0f,
                         glm::radians(90.0f),
@@ -352,7 +341,7 @@ protected:
                 });
         doors.push_back(
                 OpenableDoor{
-                        getPolikeaBuildingPosition() + glm::vec3(5.0947, 0.25, -DOOR_HWIDTH / 2),
+                        getPolikeaBuildingPosition() + glm::vec3(5.0947f, 0.25f, -DOOR_HWIDTH / 2),
                         glm::radians(180.0f),
                         0.0f,
                         glm::radians(90.0f),
@@ -402,8 +391,7 @@ protected:
         MIChar.center = (MIChar.minCoords + MIChar.maxCoords) / 2.0f;
         MIChar.size = MIChar.maxCoords - MIChar.minCoords;
 
-        MIChar.cylinderRadius = glm::distance(glm::vec3(MIChar.maxCoords.x, 0, MIChar.maxCoords.z),
-                                              glm::vec3(MIChar.minCoords.x, 0, MIChar.minCoords.z)) / 2;
+        MIChar.cylinderRadius = glm::distance(glm::vec3(MIChar.maxCoords.x, 0, MIChar.maxCoords.z),glm::vec3(MIChar.minCoords.x, 0, MIChar.minCoords.z)) / 2;
         MIChar.cylinderHeight = MIChar.maxCoords.y - MIChar.minCoords.y;
 
         return MIChar;
@@ -431,7 +419,6 @@ protected:
                 MI.modelPos = polikeaBuildingPosition + polikeaBuildingOffsets[polikeaBuildingOffsetsIndex];
                 polikeaBuildingOffsetsIndex++;
             } else {
-                //TODO what is this MI.modelPos = CamPos - glm::vec3(0.0f + posOffset * 2.0f, CamPos.y, 0.0f);
                 throw std::invalid_argument("Not implemented");
             }
             MI.modelRot = (MAX_OBJECTS_IN_POLIKEA - polikeaBuildingOffsetsIndex < 3) ? glm::radians(180.0f) : 0.0f;
@@ -446,8 +433,7 @@ protected:
             MI.center = (MI.minCoords + MI.maxCoords) / 2.0f;
             MI.size = MI.maxCoords - MI.minCoords;
 
-            MI.cylinderRadius = glm::distance(glm::vec3(MI.maxCoords.x, 0, MI.maxCoords.z),
-                                              glm::vec3(MI.minCoords.x, 0, MI.minCoords.z)) / 2;
+            MI.cylinderRadius = glm::distance(glm::vec3(MI.maxCoords.x, 0, MI.maxCoords.z),glm::vec3(MI.minCoords.x, 0, MI.minCoords.z)) / 2;
             MI.cylinderHeight = MI.maxCoords.y - MI.minCoords.y;
 
             MI.modelPos += glm::vec3(0.0, -std::min(0.0f, MI.minCoords.y), 0.0);
@@ -703,7 +689,7 @@ protected:
         cameraYaw = cameraYaw - ROT_SPEED * deltaT * r.y;
 
         camPitch = camPitch - ROT_SPEED * deltaT * r.x * (isLookAt ? -1.0f : 1.0f);
-        camPitch = camPitch < minPitch ? minPitch : (camPitch > maxPitch ? maxPitch : camPitch);
+        camPitch = camPitch < minPitch ? minPitch : (camPitch > (isLookAt ? 0.0f : maxPitch) ? (isLookAt ? 0.0f : maxPitch) : camPitch);
         camRoll = camRoll - ROT_SPEED * deltaT * r.z;
         camRoll = camRoll < glm::radians(-180.0f) ? glm::radians(-180.0f) :
                   (camRoll > glm::radians(180.0f) ? glm::radians(180.0f) : camRoll);
@@ -737,16 +723,10 @@ protected:
         auto diff = shortestAngularDistance(characterYaw, newAngle, dir);
         characterYaw += static_cast<float>(dir) * std::min(deltaT * ROT_SPEED * 4, diff);
 
-        for (auto &boundingRectangle: buildingBoundingRectangle)
-            if (checkIfInBoundingRectangle(characterPos, boundingRectangle))
-                newCharacterPos = characterPos = oldCharacterPos;
-
         if (isLookAtFire) {
             if (!isLookAtDebounce) {
                 isLookAtDebounce = true;
                 curIsLookAtDebounce = GLFW_KEY_Z;
-                // If isLookAt is false that means that we're going to see the character and that a potential teleport without the character
-                // may have occurred. Thus, we need to adjust the character's position.
                 isLookAt = !isLookAt; // Flip this boolean to change lookAt mode.
                 characterYaw = cameraYaw + glm::radians(90.0f);
             }
@@ -767,7 +747,6 @@ protected:
         }
 
         if (!OnlyMoveCam) {
-            //isLookAt = false; // When we move objects we don't want to see also the character.
             //Checks to see if an object can be bought
             if (!MV[MoveObjIndex].hasBeenBought) {
                 bool isObjectAllowedToMove = true;
@@ -804,6 +783,7 @@ protected:
                             if (MV[MoveObjIndex].roomCycling >= N_ROOMS)
                                 MV[MoveObjIndex].roomCycling = 0;
                             newCharacterPos = characterPos = roomCenters[MV[MoveObjIndex].roomCycling];
+                            characterYaw = cameraYaw + glm::radians(90.0f);
                             MV[MoveObjIndex].modelPos = rotateTargetRespectToCam(characterPos, cameraYaw, camPitch,modelPos);
                         }
                     }
@@ -819,8 +799,7 @@ protected:
                 }
 
                 if (MV[MoveObjIndex].modelPos.y < 0.0f) MV[MoveObjIndex].modelPos.y = 0.0f;
-                float ceilingOverload =
-                        MV[MoveObjIndex].modelPos.y + MV[MoveObjIndex].cylinderHeight - ROOM_CEILING_HEIGHT;
+                float ceilingOverload = MV[MoveObjIndex].modelPos.y + MV[MoveObjIndex].cylinderHeight - ROOM_CEILING_HEIGHT;
                 if (ceilingOverload > 0)
                     MV[MoveObjIndex].modelPos.y -= ceilingOverload;
             }
@@ -924,6 +903,7 @@ protected:
             kDebounce = false;
             curKDebounce = 0;
         }
+
         if (isHPressed) {
             if (!hDebounce) {
                 hDebounce = true;
@@ -940,6 +920,7 @@ protected:
         // ----- CHARACTER MANIPULATION AND MATRIX GENERATION ----- //
 
         glm::mat4 World, WorldCharacter, ViewPrj;
+
         // We check the bounding of the character for surroundings
         for (const auto &boundingRectangle: buildingBoundingRectangle)
             if (checkIfInBoundingRectangle(characterPos, boundingRectangle, 0.15f))
@@ -961,9 +942,8 @@ protected:
                      glm::rotate(glm::mat4(1), camPitch, glm::vec3(1.0f, 0.0f, 0.0f)) *
                      glm::vec4(0, camHeight, camDist, 1);
 
-            // Next we call the GameLogic() function to compute the lookAt matrices
+            // Next we call the getLookAt() function to compute the lookAt matrices
             getLookAt(Ar, ViewPrj, WorldCharacter, deltaT, camPos, characterPos, characterYaw);
-            // At the end put this to false since the adjustment has occurred (if it was needed).
         } else {
             // Otherwise we normally build our View-Projection matrix.
             camPos = glm::translate(glm::mat4(1.0f), characterPos) * glm::vec4(0, camHeight, 0, 1);
@@ -986,19 +966,16 @@ protected:
                     gubo.spotLights[indexSpot].g = light.parameters.spot.g;
                     gubo.spotLights[indexSpot].cosout = light.parameters.spot.cosout;
                     gubo.spotLights[indexSpot].cosin = light.parameters.spot.cosin;
-                    gubo.spotLights[indexSpot].lightPos = glm::vec3(
-                            glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
+                    gubo.spotLights[indexSpot].lightPos = glm::vec3(glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
                             glm::vec4(light.position, 1.0f)) + modelInfo.modelPos;
-                    gubo.spotLights[indexSpot].lightDir =
-                            glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
+                    gubo.spotLights[indexSpot].lightDir = glm::rotate(glm::mat4(1.0), modelInfo.modelRot, glm::vec3(0, 1, 0)) *
                             glm::vec4(light.direction, 1.0f);
                     gubo.spotLights[indexSpot].lightColor = glm::vec4(light.lightColor, 1.0f);
                     indexSpot++;
                 } else if (light.type == POINT) {
                     gubo.pointLights[indexPoint].beta = light.parameters.point.beta;
                     gubo.pointLights[indexPoint].g = light.parameters.point.g;
-                    gubo.pointLights[indexPoint].lightPos =
-                            glm::vec3(glm::vec4(light.position, 1.0f)) + modelInfo.modelPos;
+                    gubo.pointLights[indexPoint].lightPos = glm::vec3(glm::vec4(light.position, 1.0f)) + modelInfo.modelPos;
                     gubo.pointLights[indexPoint].lightColor = glm::vec4(light.lightColor, 1.0f);
                     indexPoint++;
                 }
@@ -1009,10 +986,8 @@ protected:
             for (auto light: MPositionedLights.lights) {
                 gubo.pointLights[indexPoint].beta = light.parameters.point.beta;
                 gubo.pointLights[indexPoint].g = light.parameters.point.g;
-                gubo.pointLights[indexPoint].lightPos =
-                        glm::vec3(glm::vec4(light.position, 1.0f)) + positionedLightPos[i];
-                gubo.pointLights[indexPoint].lightColor = glm::vec4(
-                        turnOffLight ? glm::vec3(0.0f, 0.0f, 0.0f) : light.lightColor, 1.0f);
+                gubo.pointLights[indexPoint].lightPos = glm::vec3(glm::vec4(light.position, 1.0f)) + positionedLightPos[i];
+                gubo.pointLights[indexPoint].lightColor = glm::vec4(turnOffLight ? glm::vec3(0.0f, 0.0f, 0.0f) : light.lightColor, 1.0f);
                 indexPoint++;
             }
         }
@@ -1025,7 +1000,7 @@ protected:
         uboPolikea.gamma = 180.0f;
         uboPolikea.sColor = glm::vec3(1.0f);
         uboPolikea.worldMat = glm::translate(glm::mat4(1), polikeaBuildingPosition) * glm::scale(glm::mat4(1), glm::vec3(5.0f));
-        uboPolikea.nMat = glm::inverse(uboPolikea.worldMat);
+        uboPolikea.nMat = glm::inverse(glm::transpose(uboPolikea.worldMat));
         uboPolikea.mvpMat = ViewPrj * uboPolikea.worldMat;
         uboPolikea.diffuseLight = 1.0f;
         uboPolikea.internalLightsFactor = 1.0f;
@@ -1036,7 +1011,7 @@ protected:
         uboBuilding.gamma = 180.0f;
         uboBuilding.sColor = glm::vec3(1.0f);
         uboBuilding.worldMat = glm::mat4(1.0f);
-        uboBuilding.nMat = glm::inverse(uboBuilding.worldMat);
+        uboBuilding.nMat = glm::inverse(glm::transpose(uboBuilding.worldMat));
         uboBuilding.mvpMat = ViewPrj * uboBuilding.worldMat;
         uboBuilding.diffuseLight = 0.0f;
         uboBuilding.internalLightsFactor = 1.0f;
@@ -1052,15 +1027,7 @@ protected:
         }
 
         uboMoveOrBuyOverlay.visible = (OnlyMoveCam && displayBuyOrMoveOverlay) ? 1.0f : 0.0f;
-        bool buyOrMoveOverlay = displayBuyOrMoveOverlay &&
-                                checkIfInBoundingRectangle(
-                                        characterPos,
-                                        BoundingRectangle{
-                                                glm::vec3(polikeaBuildingPosition.x - 10.5f, 0.0f,
-                                                          polikeaBuildingPosition.z + 0.5f),
-                                                glm::vec3(polikeaBuildingPosition.x + 10.5f, 0.0f,
-                                                          polikeaBuildingPosition.z - 20.5f)}
-                                );
+        bool buyOrMoveOverlay = displayBuyOrMoveOverlay && checkIfInBoundingRectangle(characterPos,getPolikeaOccupiedArea());
         uboMoveOrBuyOverlay.overlayTex = buyOrMoveOverlay ? 1.0f : 0.0f;
         DSOverlayMoveObject.map(currentImage, &uboMoveOrBuyOverlay, sizeof(uboMoveOrBuyOverlay), 0);
 
@@ -1068,7 +1035,7 @@ protected:
         uboPolikeaExternFloor.gamma = 180.0f;
         uboPolikeaExternFloor.sColor = glm::vec3(1.0f);
         uboPolikeaExternFloor.worldMat = glm::mat4(1.0f);
-        uboPolikeaExternFloor.nMat = glm::inverse(uboPolikeaExternFloor.worldMat);
+        uboPolikeaExternFloor.nMat = glm::inverse(glm::transpose(uboPolikeaExternFloor.worldMat));
         uboPolikeaExternFloor.mvpMat = ViewPrj * uboPolikeaExternFloor.worldMat;
         // the .map() method of a DataSet object, requires the current image of the swap chain as first parameter
         // the second parameter is the pointer to the C++ data structure to transfer to the GPU
@@ -1080,7 +1047,7 @@ protected:
         uboFence.gamma = 180.0f;
         uboFence.sColor = glm::vec3(1.0f);
         uboFence.worldMat = glm::mat4(1.0f);
-        uboFence.nMat = glm::inverse(uboFence.worldMat);
+        uboFence.nMat = glm::inverse(glm::transpose(uboFence.worldMat));
         uboFence.mvpMat = ViewPrj * uboFence.worldMat;
         DSFence.map(currentImage, &uboFence, sizeof(uboFence), 0);
 
@@ -1092,11 +1059,11 @@ protected:
         uboDoor.diffuseLight = 1.0;
         //The door in the house receive no light from the outside
         for (int i = 0; i < N_ROOMS - 1; i++) {
-            uboDoor.rotOffset[i] = glm::vec4(doors[i].doorRot, /*diffuseLight = */ 0.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
+            uboDoor.rotOffsetAndLights[i] = glm::vec4(doors[i].doorRot, /*diffuseLight = */ 0.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
         }
         //The two polikea doors have the light
         for (int i = N_ROOMS - 1; i < N_ROOMS - 1 + 2; i++) {
-            uboDoor.rotOffset[i] = glm::vec4(doors[i].doorRot, /*diffuseLight = */ 1.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
+            uboDoor.rotOffsetAndLights[i] = glm::vec4(doors[i].doorRot, /*diffuseLight = */ 1.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
         }
         DSDoor.map(currentImage, &uboDoor, sizeof(uboDoor), 0);
 
@@ -1107,7 +1074,7 @@ protected:
         uboPositionedLights.internalLightsFactor = 1.0;
         uboPositionedLights.diffuseLight = 1.0;
         for (int i = 0; i < MAXIMUM_INSTANCES_PER_BUFFER; i++) {
-            uboPositionedLights.rotOffset[i] = glm::vec4(/* rot = */ 0.0f, /*diffuseLight = */ 0.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
+            uboPositionedLights.rotOffsetAndLights[i] = glm::vec4(/* rot = */ 0.0f, /*diffuseLight = */ 0.0f, /* internalLightsFactor = */1.0f, /*unused = */ 0);
         }
         DSPositionedLights.map(currentImage, &uboPositionedLights, sizeof(uboPositionedLights), 0);
 
@@ -1117,7 +1084,7 @@ protected:
             mInfo.modelUBO.gamma = 180.0f;
             mInfo.modelUBO.sColor = glm::vec3(1.0f);
             mInfo.modelUBO.worldMat = World;
-            mInfo.modelUBO.nMat = glm::inverse(mInfo.modelUBO.worldMat);
+            mInfo.modelUBO.nMat = glm::inverse(glm::transpose(mInfo.modelUBO.worldMat));
             mInfo.modelUBO.mvpMat = ViewPrj * mInfo.modelUBO.worldMat;
             mInfo.modelUBO.diffuseLight = 0.0f;
             mInfo.modelUBO.internalLightsFactor = 1.0f;

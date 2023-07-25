@@ -69,7 +69,7 @@ struct UniformBlockInstance {
     alignas(4) float gamma;
     alignas(16) glm::vec3 sColor;
     alignas(16) glm::mat4 prjViewMat;
-    alignas(16) glm::vec4 rotOffset[MAXIMUM_INSTANCES_PER_BUFFER];
+    alignas(16) glm::vec4 rotOffsetAndLights[MAXIMUM_INSTANCES_PER_BUFFER];
     alignas(4) float diffuseLight = 1.0f;
     alignas(4) float internalLightsFactor = 0.0f;
 };
