@@ -181,6 +181,7 @@ public:
 
         glm::vec3 bOffset = glm::vec3(-0.1, 0.0, 0.1);
         glm::vec3 tOffset = glm::vec3(0.1, 0.0, -0.1);
+
         // Placing boundings on walls with doors
         if (doorDirection == NORTH || doorDirection == SOUTH) {
             bounds->push_back(
@@ -194,10 +195,8 @@ public:
                     BoundingRectangle{v1 + bOffset, openingV1 + tOffset});
         }
 
-        printf("%f %f %f\n", openingV0.x, openingV0.y, openingV0.z);
-
-        if (/*doorIndices.find(openingV0) == doorIndices.end()*/ doorDirection == NORTH || doorDirection == EAST) {
-            //doorIndices.insert(openingV0);
+        //only insert the door one time: if the door is on the north or east wall
+        if (doorDirection == NORTH || doorDirection == EAST) {
             float rotType;
             if (doorDirection == NORTH || doorDirection == SOUTH) {
                 rotType = glm::radians(0.0f);
