@@ -1025,7 +1025,7 @@ protected:
         uboPolikea.gamma = 180.0f;
         uboPolikea.sColor = glm::vec3(1.0f);
         uboPolikea.worldMat = glm::translate(glm::mat4(1), polikeaBuildingPosition) * glm::scale(glm::mat4(1), glm::vec3(5.0f));
-        uboPolikea.nMat = glm::inverse(uboPolikea.worldMat);
+        uboPolikea.nMat = glm::inverse(glm::transpose(uboPolikea.worldMat));
         uboPolikea.mvpMat = ViewPrj * uboPolikea.worldMat;
         uboPolikea.diffuseLight = 1.0f;
         uboPolikea.internalLightsFactor = 1.0f;
@@ -1036,7 +1036,7 @@ protected:
         uboBuilding.gamma = 180.0f;
         uboBuilding.sColor = glm::vec3(1.0f);
         uboBuilding.worldMat = glm::mat4(1.0f);
-        uboBuilding.nMat = glm::inverse(uboBuilding.worldMat);
+        uboBuilding.nMat = glm::inverse(glm::transpose(uboBuilding.worldMat));
         uboBuilding.mvpMat = ViewPrj * uboBuilding.worldMat;
         uboBuilding.diffuseLight = 0.0f;
         uboBuilding.internalLightsFactor = 1.0f;
@@ -1068,7 +1068,7 @@ protected:
         uboPolikeaExternFloor.gamma = 180.0f;
         uboPolikeaExternFloor.sColor = glm::vec3(1.0f);
         uboPolikeaExternFloor.worldMat = glm::mat4(1.0f);
-        uboPolikeaExternFloor.nMat = glm::inverse(uboPolikeaExternFloor.worldMat);
+        uboPolikeaExternFloor.nMat = glm::inverse(glm::transpose(uboPolikeaExternFloor.worldMat));
         uboPolikeaExternFloor.mvpMat = ViewPrj * uboPolikeaExternFloor.worldMat;
         // the .map() method of a DataSet object, requires the current image of the swap chain as first parameter
         // the second parameter is the pointer to the C++ data structure to transfer to the GPU
@@ -1080,7 +1080,7 @@ protected:
         uboFence.gamma = 180.0f;
         uboFence.sColor = glm::vec3(1.0f);
         uboFence.worldMat = glm::mat4(1.0f);
-        uboFence.nMat = glm::inverse(uboFence.worldMat);
+        uboFence.nMat = glm::inverse(glm::transpose(uboFence.worldMat));
         uboFence.mvpMat = ViewPrj * uboFence.worldMat;
         DSFence.map(currentImage, &uboFence, sizeof(uboFence), 0);
 
@@ -1117,7 +1117,7 @@ protected:
             mInfo.modelUBO.gamma = 180.0f;
             mInfo.modelUBO.sColor = glm::vec3(1.0f);
             mInfo.modelUBO.worldMat = World;
-            mInfo.modelUBO.nMat = glm::inverse(mInfo.modelUBO.worldMat);
+            mInfo.modelUBO.nMat = glm::inverse(glm::transpose(mInfo.modelUBO.worldMat));
             mInfo.modelUBO.mvpMat = ViewPrj * mInfo.modelUBO.worldMat;
             mInfo.modelUBO.diffuseLight = 0.0f;
             mInfo.modelUBO.internalLightsFactor = 1.0f;
