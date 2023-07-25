@@ -690,7 +690,7 @@ protected:
         cameraYaw = cameraYaw - ROT_SPEED * deltaT * r.y;
 
         camPitch = camPitch - ROT_SPEED * deltaT * r.x * (isLookAt ? -1.0f : 1.0f);
-        camPitch = camPitch < minPitch ? minPitch : (camPitch > maxPitch ? maxPitch : camPitch);
+        camPitch = camPitch < minPitch ? minPitch : (camPitch > (isLookAt ? 0.0f : maxPitch) ? (isLookAt ? 0.0f : maxPitch) : camPitch);
         camRoll = camRoll - ROT_SPEED * deltaT * r.z;
         camRoll = camRoll < glm::radians(-180.0f) ? glm::radians(-180.0f) :
                   (camRoll > glm::radians(180.0f) ? glm::radians(180.0f) : camRoll);
