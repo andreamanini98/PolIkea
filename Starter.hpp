@@ -2958,26 +2958,6 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 
 	descriptorSets.resize(BP->swapChainImages.size());
 
-    /*uint32_t textureDynamicSize = 0;
-    for(auto & i : E) {
-        if(i.type == TEXTURE) {
-            textureDynamicSize ++;
-        }
-    }*/
-
-    /*std::vector<uint32_t> variableDescCounts(BP->swapChainImages.size());
-    if(textureDynamicSize > 1) {
-        VkDescriptorSetVariableDescriptorCountAllocateInfoEXT variableDescriptorCountAllocInfo = {};
-        variableDescriptorCountAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
-        variableDescriptorCountAllocInfo.descriptorSetCount = variableDescCounts.size();
-
-        for(unsigned int & variableDescCount : variableDescCounts)
-            variableDescCount = textureDynamicSize;
-        variableDescriptorCountAllocInfo.pDescriptorCounts = variableDescCounts.data();
-
-        allocInfo.pNext = &variableDescriptorCountAllocInfo;
-    }*/
-
 	VkResult result = vkAllocateDescriptorSets(BP->device, &allocInfo, descriptorSets.data());
 	if (result != VK_SUCCESS) {
 		PrintVkError(result);
