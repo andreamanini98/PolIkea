@@ -953,7 +953,7 @@ protected:
         // ----- END CHARACTER MANIPULATION AND MATRIX GENERATION ----- //
 
         gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
-        gubo.DlightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        gubo.DlightColor = glm::vec3(1.0f);
         gubo.AmbLightColor = glm::vec3(1.0f);
         gubo.eyePos = camPos;
 
