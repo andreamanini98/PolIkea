@@ -954,7 +954,6 @@ protected:
 
         gubo.DlightDir = glm::normalize(glm::vec3(1, 2, 3));
         gubo.DlightColor = glm::vec3(1.0f);
-        gubo.AmbLightColor = glm::vec3(1.0f);
         gubo.eyePos = camPos;
 
         size_t indexSpot = 0;
