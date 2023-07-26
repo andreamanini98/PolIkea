@@ -300,7 +300,7 @@ floorPlanToVerIndexes(const std::vector<Room> &rooms, std::vector<VertexWithText
     int test = 0;
 
     for (auto &room: rooms) {
-        int floorTex = floorTexDistribution(gen);
+        int floorTex = floorTexDistribution(gen); //random generation of floor tex
         int ceilingTex = 0;
         int wallTex = 0;
 

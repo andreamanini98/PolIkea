@@ -583,10 +583,6 @@ protected:
     // with their buffers and textures
 
     void populateCommandBuffer(VkCommandBuffer commandBuffer, int currentImage) {
-        // binds the pipeline
-        // For a pipeline object, this command binds the corresponding pipeline to the command buffer passed in its parameter
-        PMeshMultiTexture.bind(commandBuffer);
-
         // binds the data set
         // For a Dataset object, this command binds the corresponding dataset
         // to the command buffer and pipeline passed in its first and second parameters.
@@ -596,13 +592,15 @@ protected:
         // of the current image in the swap chain, passed in its last parameter
         DSGubo.bind(commandBuffer, PMeshMultiTexture, 0, currentImage);
 
+        // binds the pipeline
+        // For a pipeline object, this command binds the corresponding pipeline to the command buffer passed in its parameter
+        PMeshMultiTexture.bind(commandBuffer);
+
         DSBuilding.bind(commandBuffer, PMeshMultiTexture, 1, currentImage);
         MBuilding.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MBuilding.indices.size()), 1, 0, 0, 0);
 
-        // binds the pipeline
-        // For a pipeline object, this command binds the corresponding pipeline to the command buffer passed in its parameter
-        PMesh.bind(commandBuffer);
+
 
         // binds the data set
         // For a Dataset object, this command binds the corresponding dataset
@@ -612,6 +610,10 @@ protected:
         // This is done automatically in file Starter.hpp, however the command here needs also the index
         // of the current image in the swap chain, passed in its last parameter
         DSGubo.bind(commandBuffer, PMesh, 0, currentImage);
+
+        // binds the pipeline
+        // For a pipeline object, this command binds the corresponding pipeline to the command buffer passed in its parameter
+        PMesh.bind(commandBuffer);
 
         //--- GRID ---
         // binds the model
@@ -645,15 +647,15 @@ protected:
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MOverlay.indices.size()), 1, 0, 0, 0);
 
         // --- PIPELINE VERTEX WITH COLORS ---
-        PVertexWithColors.bind(commandBuffer);
         DSGubo.bind(commandBuffer, PVertexWithColors, 0, currentImage);
+        PVertexWithColors.bind(commandBuffer);
         DSPolikeaBuilding.bind(commandBuffer, PVertexWithColors, 1, currentImage);
         MPolikeaBuilding.bind(commandBuffer);
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(MPolikeaBuilding.indices.size()), 1, 0, 0, 0);
 
         //--- PIPELINE INSTANCED ---
-        PMeshInstanced.bind(commandBuffer);
         DSGubo.bind(commandBuffer, PMeshInstanced, 0, currentImage);
+        PMeshInstanced.bind(commandBuffer);
 
         DSDoor.bind(commandBuffer, PMeshInstanced, 1, currentImage);
         MDoor.bind(commandBuffer);
