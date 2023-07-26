@@ -2405,12 +2405,16 @@ template <class Vert, class Instance>
 void Model<Vert, Instance>::createInstanceBuffer() {
     VkDeviceSize bufferSize = sizeof(instances[0]) * instances.size();
     instanceBufferPresent = true;
-    BP->createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+    BP->createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, // Used to tell that the buffer can be used in vkcmdbindvertexbuffers (used below)
+                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |            // specifies that memory allocated with this type can be mapped for host access using vkMapMemory.
+                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,                     // bit specifies that the host cache management commands vkFlushMappedMemoryRanges and vkInvalidateMappedMemoryRanges are not needed to flush host writes to the device or make device writes visible to the host, respectively.
                      instanceBuffer, instanceBufferMemory);
 
     void* data;
+    // Once the Descriptors have been setup, the application can update them in three steps:
+    //1. Acquiring a pointer to a memory area where the CPU can write the data, using the vkMapMemory() command.
+    //2. Filling that memory area with the new values – generally done with a standard memcpy() command.
+    //3. Trigger the update of the video memory with the vkUnmapMemory() command.
     vkMapMemory(BP->device, instanceBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, instances.data(), (size_t) bufferSize);
     vkUnmapMemory(BP->device, instanceBufferMemory);
@@ -2484,7 +2488,7 @@ void Model<Vert, Instance>::bind(VkCommandBuffer commandBuffer) {
     // Instance rendering
 	if(instanceBufferPresent) {
         VkBuffer instanceBuffers[] = {instanceBuffer};
-        vkCmdBindVertexBuffers(commandBuffer, 1, 1, instanceBuffers, offsets);
+        vkCmdBindVertexBuffers(commandBuffer, 1, 1, instanceBuffers, offsets); // vkCmdBindVertexBuffers binds vertex buffers to a command buffer for use in subsequent drawing commands
     }
 	// property .indexBuffer of models, contains the VkBuffer handle to its index buffer
 	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0,
@@ -2901,7 +2905,7 @@ void DescriptorSetLayout::init(BaseProject *bp, std::vector<DescriptorSetLayoutB
 		bindings[i].descriptorType = B[i].type;
 		// MultiTexture
 		// Now we have to use the count variable previously introduced.
-		bindings[i].descriptorCount = B[i].count;
+		bindings[i].descriptorCount = B[i].count; // bindings[i].descriptorCount is the number of descriptors contained in the binding, accessed in a shader as an array
 		bindings[i].stageFlags = B[i].flags;
 		bindings[i].pImmutableSamplers = nullptr;
 	}
@@ -2990,7 +2994,7 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 				descriptorWrites[j].dstBinding = E[j].binding;
 				// MultiTexture
 				// Now we have to use the new variable previously introduced.
-				descriptorWrites[j].dstArrayElement = E[j].texDstArrayElement;
+				descriptorWrites[j].dstArrayElement = E[j].texDstArrayElement; // descriptorWrites[j].dstArrayElement is the starting element in that array, the index in which we will retrieve our texture in the array accessed in the shader
 				descriptorWrites[j].descriptorType =
 											VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 				descriptorWrites[j].descriptorCount = 1;
